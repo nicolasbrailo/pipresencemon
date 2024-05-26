@@ -2,18 +2,6 @@
 
 .PHONY: run clean system-deps
 
-wayfire_wproto.h: /usr/share/wayfire/protocols/unstable/wayfire-shell-unstable-v2.xml
-	wayland-scanner client-header < $< > $@
-wayfire_wproto.c: /usr/share/wayfire/protocols/unstable/wayfire-shell-unstable-v2.xml
-	wayland-scanner private-code < $< > $@
-wayland_wproto.h: /usr/share/wayland/wayland.xml
-	wayland-scanner client-header < $< > $@
-wayland_wproto.c: /usr/share/wayland/wayland.xml
-	wayland-scanner private-code < $< > $@
-outpowman_wproto.h: outpowman.xml
-	wayland-scanner client-header < $< > $@
-outpowman_wproto.c: outpowman.xml
-	wayland-scanner private-code < $< > $@
 outman_wproto.h: outman.xml
 	wayland-scanner client-header < $< > $@
 outman_wproto.c: outman.xml
@@ -31,7 +19,7 @@ son:
 clean:
 	rm -f *_wproto.* *.o test
 
-test: gpio.o gpio_pin_active_monitor.o outman_wproto.o outman_wproto.h test.o
+test: gpio.o gpio_pin_active_monitor.o outman_wproto.o wl_display.o outman_wproto.h test.o
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
 system-deps:
