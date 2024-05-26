@@ -46,6 +46,10 @@ test: build/wl_protos/wlr-output-management-unstable-v1.o \
 			test.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
+.PHONY: format
+format:
+	ls *.c | xargs clang-format -i
+	ls *.h | xargs clang-format -i
 
 # System tests
 .PHONY: system-deps screenoff screenon
