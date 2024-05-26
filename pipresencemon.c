@@ -22,37 +22,37 @@ void sighandler(int) { gUsrStop = true; }
 
 int main() {
   signal(SIGINT, sighandler);
+
+  // Because a PIR will be motion based, we want a low threshold and a long history
   struct GpioPinActiveMonitor_args args = {
       .sensor_pin = 26,
-      .sensor_poll_period_secs = 1,
+      .sensor_poll_period_secs = 2,
       .monitor_window_seconds = 30,
-      .rising_edge_active_threshold = .1,
-      .falling_edge_inactive_threshold = .6,
+      .rising_edge_active_threshold_pct = 20,
+      .falling_edge_inactive_threshold_pct = 10,
   };
-  struct GpioPinActiveMonitor *mon = gpio_active_monitor_create(args);
-  struct wl_ctrl *display_state = wl_ctrl_init();
-  if (!display_state) {
-    printf("No display\n");
+  struct GpioPinActiveMonitor *mon = gpio_active_monitor_init(args);
+  if (!mon) {
     return 1;
   }
 
-  wl_ctrl_display_on(display_state);
-  sleep(5);
-  wl_ctrl_display_off(display_state);
-  gUsrStop = true;
+  struct wl_ctrl *display_state = wl_ctrl_init();
+  if (!display_state) {
+    printf("No display\n");
+    gpio_active_monitor_free(mon);
+    return 1;
+  }
 
   bool isOnNow = false;
   while (!gUsrStop) {
     if (gpio_active_monitor_pin_active(mon) && !isOnNow) {
       wl_ctrl_display_on(display_state);
       isOnNow = true;
-      printf("PIR reports on %f pct, turn on display\n",
-             gpio_active_monitor_active_pct(mon));
+      printf("PIR reports on %f pct, turn on display\n", gpio_active_monitor_active_pct(mon));
     } else if (!gpio_active_monitor_pin_active(mon) && isOnNow) {
       wl_ctrl_display_off(display_state);
       isOnNow = false;
-      printf("PIR reports off %f pct, shutdown display\n",
-             gpio_active_monitor_active_pct(mon));
+      printf("PIR reports off %f pct, shutdown display\n", gpio_active_monitor_active_pct(mon));
     } else {
       // display state matches wanted state
       printf("Active? %f / %i\n", gpio_active_monitor_active_pct(mon),
@@ -61,7 +61,7 @@ int main() {
     sleep(1);
   }
 
-  gpio_active_monitor_close(mon);
+  gpio_active_monitor_free(mon);
   wl_ctrl_free(display_state);
   return 0;
 }

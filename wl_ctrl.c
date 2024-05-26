@@ -43,16 +43,13 @@ struct wl_ctrl {
   bool failed;
 };
 
-static void
-config_handle_succeeded(void *data,
-                        struct zwlr_output_configuration_v1 *config) {
+static void config_handle_succeeded(void *data, struct zwlr_output_configuration_v1 *config) {
   struct wl_ctrl *state = data;
   zwlr_output_configuration_v1_destroy(config);
   state->running = false;
 }
 
-static void config_handle_failed(void *data,
-                                 struct zwlr_output_configuration_v1 *config) {
+static void config_handle_failed(void *data, struct zwlr_output_configuration_v1 *config) {
   struct wl_ctrl *state = data;
   zwlr_output_configuration_v1_destroy(config);
   state->running = false;
@@ -61,9 +58,7 @@ static void config_handle_failed(void *data,
   fprintf(stderr, "failed to apply configuration\n");
 }
 
-static void
-config_handle_cancelled(void *data,
-                        struct zwlr_output_configuration_v1 *config) {
+static void config_handle_cancelled(void *data, struct zwlr_output_configuration_v1 *config) {
   struct wl_ctrl *state = data;
   zwlr_output_configuration_v1_destroy(config);
   state->running = false;
@@ -78,10 +73,9 @@ static const struct zwlr_output_configuration_v1_listener config_listener = {
     .cancelled = config_handle_cancelled,
 };
 
-#define DECL_HEAD_CB_COPY_STR(param)                                           \
-  static void head_handle_##param(void *data, struct zwlr_output_head_v1 *,    \
-                                  const char *param) {                         \
-    ((struct wl_head_info *)data)->param = strdup(param);                      \
+#define DECL_HEAD_CB_COPY_STR(param)                                                               \
+  static void head_handle_##param(void *data, struct zwlr_output_head_v1 *, const char *param) {   \
+    ((struct wl_head_info *)data)->param = strdup(param);                                          \
   }
 
 DECL_HEAD_CB_COPY_STR(name)
@@ -89,8 +83,7 @@ DECL_HEAD_CB_COPY_STR(description)
 
 #undef DECL_HEAD_CB_COPY_STR
 
-static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *,
-                                int32_t enabled) {
+static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *, int32_t enabled) {
   ((struct wl_head_info *)data)->enabled = !!enabled;
 }
 
@@ -134,8 +127,7 @@ static const struct zwlr_output_head_v1_listener head_listener = {
     .adaptive_sync = head_handle_ignore,
 };
 
-static void output_manager_handle_head(void *data,
-                                       struct zwlr_output_manager_v1 *,
+static void output_manager_handle_head(void *data, struct zwlr_output_manager_v1 *,
                                        struct zwlr_output_head_v1 *wlr_head) {
   struct wl_ctrl *state = data;
   struct wl_head_info *head = calloc(1, sizeof(*head));
@@ -144,16 +136,14 @@ static void output_manager_handle_head(void *data,
   zwlr_output_head_v1_add_listener(wlr_head, &head_listener, head);
 }
 
-static void output_manager_handle_done(void *data,
-                                       struct zwlr_output_manager_v1 *,
+static void output_manager_handle_done(void *data, struct zwlr_output_manager_v1 *,
                                        uint32_t serial) {
   struct wl_ctrl *state = data;
   state->serial = serial;
   state->has_serial = true;
 }
 
-static void output_manager_handle_finished(void *,
-                                           struct zwlr_output_manager_v1 *) {
+static void output_manager_handle_finished(void *, struct zwlr_output_manager_v1 *) {
   // This space is intentionally left blank
 }
 
@@ -163,22 +153,19 @@ static const struct zwlr_output_manager_v1_listener output_manager_listener = {
     .finished = output_manager_handle_finished,
 };
 
-static void registry_handle_global(void *data, struct wl_registry *registry,
-                                   uint32_t name, const char *interface,
-                                   uint32_t version) {
+static void registry_handle_global(void *data, struct wl_registry *registry, uint32_t name,
+                                   const char *interface, uint32_t version) {
   struct wl_ctrl *state = data;
 
   if (strcmp(interface, zwlr_output_manager_v1_interface.name) == 0) {
     uint32_t version_to_bind = version <= 4 ? version : 4;
-    state->output_manager = wl_registry_bind(
-        registry, name, &zwlr_output_manager_v1_interface, version_to_bind);
-    zwlr_output_manager_v1_add_listener(state->output_manager,
-                                        &output_manager_listener, state);
+    state->output_manager =
+        wl_registry_bind(registry, name, &zwlr_output_manager_v1_interface, version_to_bind);
+    zwlr_output_manager_v1_add_listener(state->output_manager, &output_manager_listener, state);
   }
 }
 
-static void registry_handle_global_remove(void *, struct wl_registry *,
-                                          uint32_t) {
+static void registry_handle_global_remove(void *, struct wl_registry *, uint32_t) {
   // This space is intentionally left blank
 }
 
@@ -259,8 +246,7 @@ void wl_ctrl_free(struct wl_ctrl *state) {
 
 static void wl_ctrl_display_onoff(struct wl_ctrl *state, bool shouldTurnOn) {
   struct zwlr_output_configuration_v1 *config =
-      zwlr_output_manager_v1_create_configuration(state->output_manager,
-                                                  state->serial);
+      zwlr_output_manager_v1_create_configuration(state->output_manager, state->serial);
   zwlr_output_configuration_v1_add_listener(config, &config_listener, state);
 
   struct wl_head_info *head;
@@ -289,10 +275,6 @@ static void wl_ctrl_display_onoff(struct wl_ctrl *state, bool shouldTurnOn) {
   }
 }
 
-void wl_ctrl_display_off(struct wl_ctrl *state) {
-  wl_ctrl_display_onoff(state, false);
-}
+void wl_ctrl_display_off(struct wl_ctrl *state) { wl_ctrl_display_onoff(state, false); }
 
-void wl_ctrl_display_on(struct wl_ctrl *state) {
-  wl_ctrl_display_onoff(state, true);
-}
+void wl_ctrl_display_on(struct wl_ctrl *state) { wl_ctrl_display_onoff(state, true); }

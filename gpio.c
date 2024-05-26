@@ -11,7 +11,6 @@
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13
-#define GPIO_PINS (CHAR_BIT * sizeof(gpio_reg_t))
 
 struct GPIO {
   int fd;
@@ -28,16 +27,15 @@ struct GPIO *gpio_open() {
 
   gpio->fd = open(gpio_path, O_RDWR);
   if (gpio->fd < 0) {
-    printf("Error opening %s\n", gpio_path);
+    fprintf(stderr, "Error opening %s\n", gpio_path);
     perror("GPIO init fail");
     free(gpio);
     return NULL;
   }
 
-  gpio->mem =
-      mmap(NULL, GPIO_MEM_SZ, PROT_READ + PROT_WRITE, MAP_SHARED, gpio->fd, 0);
+  gpio->mem = mmap(NULL, GPIO_MEM_SZ, PROT_READ + PROT_WRITE, MAP_SHARED, gpio->fd, 0);
   if (!gpio->mem) {
-    printf("Can't mmap %s\n", gpio_path);
+    fprintf(stderr, "Can't mmap %s\n", gpio_path);
     perror("GPIO init fail");
     close(gpio->fd);
     free(gpio);
@@ -63,17 +61,14 @@ void gpio_close(struct GPIO *gpio) {
   free(gpio);
 }
 
-bool gpio_get_pin(struct GPIO *gpio, size_t pin) {
-  return gpio->mem[GPIO_INPUTS] & (1 << pin);
-}
+bool gpio_get_pin(struct GPIO *gpio, size_t pin) { return gpio->mem[GPIO_INPUTS] & (1 << pin); }
 
 gpio_reg_t gpio_get_inputs(struct GPIO *gpio) { return gpio->mem[GPIO_INPUTS]; }
 
 #define COL_NOO "\x1B[0m"
 #define COL_RED "\x1B[31m"
 
-gpio_reg_t gpio_get_and_print_delta(struct GPIO *gpio,
-                                    gpio_reg_t prev_gpio_reg) {
+gpio_reg_t gpio_get_and_print_delta(struct GPIO *gpio, gpio_reg_t prev_gpio_reg) {
   printf("%s ", COL_NOO);
   for (size_t i = 0; i < GPIO_PINS; ++i) {
     printf("P%02lu ", i);

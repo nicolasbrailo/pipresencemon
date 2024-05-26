@@ -1,11 +1,11 @@
 .PHONY: run clean
 
-run: test
-	./test
+run: pipresencemon
+	./pipresencemon
 
 clean:
 	rm -rf build
-	rm -f ./test
+	rm -f ./pipresencemon
 
 
 CFLAGS=-Wall -Werror -Wextra \
@@ -41,11 +41,11 @@ build/%.o: %.c %.h
 	mkdir -p build
 	$(CC) $(CFLAGS) -isystem ./build $< -c -o $@
 
-test: build/wl_protos/wlr-output-management-unstable-v1.o \
+pipresencemon: build/wl_protos/wlr-output-management-unstable-v1.o \
 			build/wl_ctrl.o \
 			build/gpio.o \
 			build/gpio_pin_active_monitor.o \
-			test.c
+			pipresencemon.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
 .PHONY: format formatall
