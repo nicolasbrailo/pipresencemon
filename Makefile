@@ -46,8 +46,11 @@ test: build/wl_protos/wlr-output-management-unstable-v1.o \
 			test.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
-.PHONY: format
+.PHONY: format formatall
 format:
+	git clang-format
+
+formatall:
 	ls *.c | xargs clang-format -i
 	ls *.h | xargs clang-format -i
 
