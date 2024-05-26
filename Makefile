@@ -1,17 +1,43 @@
-CFLAGS=-Wall -Werror -Wextra
+#CFLAGS=-Wall -Werror -Wextra
 
 .PHONY: run clean system-deps
 
+wayfire_wproto.h: /usr/share/wayfire/protocols/unstable/wayfire-shell-unstable-v2.xml
+	wayland-scanner client-header < $< > $@
+wayfire_wproto.c: /usr/share/wayfire/protocols/unstable/wayfire-shell-unstable-v2.xml
+	wayland-scanner private-code < $< > $@
+wayland_wproto.h: /usr/share/wayland/wayland.xml
+	wayland-scanner client-header < $< > $@
+wayland_wproto.c: /usr/share/wayland/wayland.xml
+	wayland-scanner private-code < $< > $@
+outpowman_wproto.h: outpowman.xml
+	wayland-scanner client-header < $< > $@
+outpowman_wproto.c: outpowman.xml
+	wayland-scanner private-code < $< > $@
+outman_wproto.h: outman.xml
+	wayland-scanner client-header < $< > $@
+outman_wproto.c: outman.xml
+	wayland-scanner private-code < $< > $@
+
 run: test
-	./test
+	WAYLAND_DISPLAY="wayland-1" ./test
+	#./test
+
+soff:
+	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --off
+son:
+	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --on
 
 clean:
-	rm -f *.o test
+	rm -f *_wproto.* *.o test
 
-test: test.o gpio.o gpio_pin_active_monitor.o
-	$(CC) $(CFLAGS) $? -o $@
+test: gpio.o gpio_pin_active_monitor.o outman_wproto.o outman_wproto.h test.o
+	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
 system-deps:
 	# wayland headers
 	sudo apt-get install libwayland-dev
-
+	# wlroots protocol files, needed for wlr-output-power-management-unstable-v1.xml
+	sudo apt-get install libwlroots-dev
+	# Install protocols.xml into /usr/share/wayland-protocols, not sure if needed
+	sudo apt-get install wayland-protocols
