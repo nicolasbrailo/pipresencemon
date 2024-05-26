@@ -7,16 +7,55 @@
 
 #include "wl_display.h"
 
+#define _POSIX_C_SOURCE 200809L
+#include <assert.h>
+#include <errno.h>
+#include <getopt.h>
+#include <math.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <wayland-client.h>
+#include "outman_wproto.h"
+
+struct wl_display;
+struct randr_head;
+
+struct randr_head {
+	struct wl_display *state;
+	struct zwlr_output_head_v1 *wlr_head;
+	struct wl_list link;
+	char *name, *description;
+	char *make, *model, *serial_number;
+	bool enabled;
+};
+
+struct wl_display {
+	struct zwlr_output_manager_v1 *output_manager;
+	struct wl_display *display;
+	struct wl_registry *registry;
+	struct wl_list heads;
+	uint32_t serial;
+	bool has_serial;
+	bool running;
+	bool failed;
+};
+
+
+
+
 static void config_handle_succeeded(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 }
 
 static void config_handle_failed(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 	state->failed = true;
@@ -26,7 +65,7 @@ static void config_handle_failed(void *data,
 
 static void config_handle_cancelled(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 	state->failed = true;
@@ -40,7 +79,7 @@ static const struct zwlr_output_configuration_v1_listener config_listener = {
 	.cancelled = config_handle_cancelled,
 };
 
-static void apply_state(struct randr_state *state, bool dry_run) {
+static void apply_state(struct wl_display *state, bool dry_run) {
 	struct zwlr_output_configuration_v1 *config =
 		zwlr_output_manager_v1_create_configuration(state->output_manager,
 		state->serial);
@@ -138,7 +177,7 @@ static const struct zwlr_output_head_v1_listener head_listener = {
 static void output_manager_handle_head(void *data,
 		struct zwlr_output_manager_v1 *manager,
 		struct zwlr_output_head_v1 *wlr_head) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 
 	struct randr_head *head = calloc(1, sizeof(*head));
 	head->state = state;
@@ -150,7 +189,7 @@ static void output_manager_handle_head(void *data,
 
 static void output_manager_handle_done(void *data,
 		struct zwlr_output_manager_v1 *manager, uint32_t serial) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 	state->serial = serial;
 	state->has_serial = true;
 }
@@ -168,7 +207,7 @@ static const struct zwlr_output_manager_v1_listener output_manager_listener = {
 
 static void registry_handle_global(void *data, struct wl_registry *registry,
 		uint32_t name, const char *interface, uint32_t version) {
-	struct randr_state *state = data;
+	struct wl_display *state = data;
 
 	if (strcmp(interface, zwlr_output_manager_v1_interface.name) == 0) {
 		uint32_t version_to_bind = version <= 4 ? version : 4;
@@ -190,13 +229,19 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 
-int init_things(struct randr_state *state) {
+#define RPI_DEFAULT_WL_DISPLAY_NAME "wayland-1"
+
+struct wl_display* wl_display_init() {
+    struct wl_display* state = malloc(sizeof(struct wl_display));
+    bzero(state, sizeof(struct wl_display));
+    state->running = true;
+
 	wl_list_init(&state->heads);
 
-	state->display = wl_display_connect(NULL);
+	state->display = wl_display_connect(RPI_DEFAULT_WL_DISPLAY_NAME);
 	if (state->display == NULL) {
 		fprintf(stderr, "failed to connect to display\n");
-		return -1;
+		return NULL;
 	}
 
 	state->registry = wl_display_get_registry(state->display);
@@ -204,26 +249,26 @@ int init_things(struct randr_state *state) {
 
 	if (wl_display_roundtrip(state->display) < 0) {
 		fprintf(stderr, "wl_display_roundtrip failed\n");
-		return -1;
+		return NULL;
 	}
 
 	if (state->output_manager == NULL) {
 		fprintf(stderr, "compositor doesn't support "
 			"wlr-output-management-unstable-v1\n");
-		return -1;
+		return NULL;
 	}
 
 	while (!state->has_serial) {
 		if (wl_display_dispatch(state->display) < 0) {
 			fprintf(stderr, "wl_display_dispatch failed\n");
-			return -1;
+			return NULL;
 		}
 	}
 
-        return 0;
+        return state;
 }
 
-void deinit_things(struct randr_state *state) {
+void wl_display_free(struct wl_display *state) {
 	struct randr_head *head, *tmp_head;
 	wl_list_for_each_safe(head, tmp_head, &state->heads, link) {
 		zwlr_output_head_v1_destroy(head->wlr_head);
@@ -237,16 +282,17 @@ void deinit_things(struct randr_state *state) {
 	zwlr_output_manager_v1_destroy(state->output_manager);
 	wl_registry_destroy(state->registry);
 	wl_display_disconnect(state->display);
+        free(state);
 }
 
-void toggle(struct randr_state *state) {
+void wl_display_on(struct wl_display *state) {
+        state->running = true;
 	struct randr_head *current_head = NULL;
         {
             struct randr_head *head;
             wl_list_for_each(head, &state->heads, link) {
                     if (head->enabled) {
-                        printf("Will shutdown %s \"%s\"\n", head->name, head->description);
-                        head->enabled = false;
+                        printf("Display already ON %s \"%s\"\n", head->name, head->description);
                     } else {
                         printf("Will POWON %s \"%s\"\n", head->name, head->description);
                         head->enabled = true;
@@ -262,3 +308,25 @@ void toggle(struct randr_state *state) {
 
 }
 
+void wl_display_off(struct wl_display *state) {
+        state->running = true;
+	struct randr_head *current_head = NULL;
+        {
+            struct randr_head *head;
+            wl_list_for_each(head, &state->heads, link) {
+                    if (head->enabled) {
+                        printf("Will shutdown %s \"%s\"\n", head->name, head->description);
+                        head->enabled = false;
+                    } else {
+                        printf("Display already off %s \"%s\"\n", head->name, head->description);
+                    }
+            }
+        }
+
+        apply_state(state, false);
+
+	while (state->running && wl_display_dispatch(state->display) != -1) {
+		// This space intentionally left blank
+	}
+
+}

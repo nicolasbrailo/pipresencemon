@@ -1,7 +1,7 @@
-#if 0
 #include <string.h>
 #include "gpio_pin_active_monitor.h"
 #include "gpio.h"
+#include "wl_display.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -22,7 +22,7 @@ void sighandler(int) {
     gUsrStop = true;
 }
 
-int main2() {
+int main() {
     signal(SIGINT, sighandler);
     struct GpioPinActiveMonitor_args args = {
         .sensor_pin=26,
@@ -32,29 +32,31 @@ int main2() {
         .falling_edge_inactive_threshold=.6,
     };
     struct GpioPinActiveMonitor *mon = gpio_active_monitor_create(args);
+    struct wl_display* display_state = wl_display_init();
+    if (!display_state) {
+        printf("No display\n");
+        return 1;
+    }
 
+    bool isOnNow = false;
     while (!gUsrStop) {
-        printf("Active? %f / %i\n", gpio_active_monitor_active_pct(mon), gpio_active_monitor_pin_active(mon));
-        if (gpio_active_monitor_pin_active(mon)) {
-            wl_display_turn_on();
+        if (gpio_active_monitor_pin_active(mon) && !isOnNow) {
+            wl_display_on(display_state);
+            isOnNow = true;
+            printf("PIR reports on %f pct, turn on display\n", gpio_active_monitor_active_pct(mon));
+        } else if (!gpio_active_monitor_pin_active(mon) && isOnNow) {
+            wl_display_off(display_state);
+            isOnNow = false;
+            printf("PIR reports off %f pct, shutdown display\n", gpio_active_monitor_active_pct(mon));
         } else {
-            wl_display_turn_off();
+            // display state matches wanted state
+            printf("Active? %f / %i\n", gpio_active_monitor_active_pct(mon), gpio_active_monitor_pin_active(mon));
         }
         sleep(1);
     }
 
     gpio_active_monitor_close(mon);
+    wl_display_free(display_state);
     return 0;
 }
 
-#endif
-
-#include "wl_display.h"
-
-int main(int argc, char *argv[]) {
-    struct randr_state state = { .running = true };
-    init_things(&state);
-    toggle(&state);
-    deinit_things(&state);
-    return state.failed ? EXIT_FAILURE : EXIT_SUCCESS;
-}
