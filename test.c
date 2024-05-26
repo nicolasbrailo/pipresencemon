@@ -36,7 +36,6 @@ int main() {
     return 1;
   }
 
-
   wl_ctrl_display_on(display_state);
   sleep(5);
   wl_ctrl_display_off(display_state);

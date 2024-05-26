@@ -7,22 +7,16 @@
 
 #include "wl_ctrl.h"
 
-#include <strings.h>
+// Automatically generated from:
+// https://gitlab.freedesktop.org/wlroots/wlr-protocols (see makefile)
+#include "wl_protos/wlr-output-management-unstable-v1.h"
 
-#define _POSIX_C_SOURCE 200809L
-#include <assert.h>
-#include <errno.h>
-#include <getopt.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <wayland-client.h>
-
-// Automatically generated from:
-// https://gitlab.freedesktop.org/wlroots/wlr-protocols (see makefile)
-#include "wl_protos/wlr-output-management-unstable-v1.h"
 
 struct wl_ctrl;
 
@@ -34,8 +28,8 @@ struct wl_head_info {
   bool enabled;
 };
 
-static void printf_wl_head_info(struct wl_head_info* i, const char* msg) {
-    printf("%s %s \"%s\"\n", msg, i->name, i->description);
+static void printf_wl_head_info(struct wl_head_info *i, const char *msg) {
+  printf("%s %s \"%s\"\n", msg, i->name, i->description);
 }
 
 struct wl_ctrl {
@@ -84,18 +78,19 @@ static const struct zwlr_output_configuration_v1_listener config_listener = {
     .cancelled = config_handle_cancelled,
 };
 
-
-#define DECL_HEAD_CB_COPY_STR(param) \
-    static void head_handle_ ## param(void *data, struct zwlr_output_head_v1*, const char *param) { \
-      ((struct wl_head_info *)data)->param = strdup(param); \
-    }
+#define DECL_HEAD_CB_COPY_STR(param)                                           \
+  static void head_handle_##param(void *data, struct zwlr_output_head_v1 *,    \
+                                  const char *param) {                         \
+    ((struct wl_head_info *)data)->param = strdup(param);                      \
+  }
 
 DECL_HEAD_CB_COPY_STR(name)
 DECL_HEAD_CB_COPY_STR(description)
 
 #undef DECL_HEAD_CB_COPY_STR
 
-static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *, int32_t enabled) {
+static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *,
+                                int32_t enabled) {
   ((struct wl_head_info *)data)->enabled = !!enabled;
 }
 
@@ -113,7 +108,8 @@ static void head_handle_finished(void *data, struct zwlr_output_head_v1 *) {
 }
 
 // wlr_output_management will report a lot of properties about the display we
-// don't care about. The signature doesn't match the function wlroots expect, so doing anything inside of this function will probably crash.
+// don't care about. The signature doesn't match the function wlroots expect, so
+// doing anything inside of this function will probably crash.
 static void head_handle_ignore() {}
 
 static const struct zwlr_output_head_v1_listener head_listener = {
@@ -247,65 +243,56 @@ void wl_ctrl_free(struct wl_ctrl *state) {
   }
 
   if (state->output_manager) {
-      zwlr_output_manager_v1_destroy(state->output_manager);
+    zwlr_output_manager_v1_destroy(state->output_manager);
   }
 
   if (state->registry) {
-      wl_registry_destroy(state->registry);
+    wl_registry_destroy(state->registry);
   }
 
   if (state->display) {
-      wl_display_disconnect(state->display);
+    wl_display_disconnect(state->display);
   }
 
   free(state);
 }
 
 static void wl_ctrl_display_onoff(struct wl_ctrl *state, bool shouldTurnOn) {
-  {
-    struct wl_head_info *head;
-    wl_list_for_each(head, &state->heads, link) {
-      if (head->enabled && shouldTurnOn) {
-        printf_wl_head_info(head, "Display already on");
-      } else if (head->enabled && !shouldTurnOn) {
-        printf_wl_head_info(head, "Will shutdown");
-        head->enabled = false;
-      } else if (!head->enabled && shouldTurnOn) {
-        printf_wl_head_info(head, "Will power on");
-        head->enabled = true;
-      } else if (!head->enabled && !shouldTurnOn) {
-        printf_wl_head_info(head, "Display already off");
-      }
-    }
-  }
-
-
-  state->running = true;
-  struct zwlr_output_configuration_v1 *config = zwlr_output_manager_v1_create_configuration(state->output_manager, state->serial);
+  struct zwlr_output_configuration_v1 *config =
+      zwlr_output_manager_v1_create_configuration(state->output_manager,
+                                                  state->serial);
   zwlr_output_configuration_v1_add_listener(config, &config_listener, state);
 
   struct wl_head_info *head;
   wl_list_for_each(head, &state->heads, link) {
-    if (!head->enabled) {
+    if (head->enabled && shouldTurnOn) {
+      printf_wl_head_info(head, "Display already on");
+    } else if (head->enabled && !shouldTurnOn) {
+      printf_wl_head_info(head, "Will shutdown");
       zwlr_output_configuration_v1_disable_head(config, head->wlr_head);
-    } else {
-      struct zwlr_output_configuration_head_v1 *config_head = zwlr_output_configuration_v1_enable_head(config, head->wlr_head);
+      head->enabled = false;
+    } else if (!head->enabled && shouldTurnOn) {
+      printf_wl_head_info(head, "Will power on");
+      struct zwlr_output_configuration_head_v1 *config_head =
+          zwlr_output_configuration_v1_enable_head(config, head->wlr_head);
       zwlr_output_configuration_head_v1_destroy(config_head);
+      head->enabled = true;
+    } else if (!head->enabled && !shouldTurnOn) {
+      printf_wl_head_info(head, "Display already off");
     }
   }
 
+  state->running = true;
   zwlr_output_configuration_v1_apply(config);
-
   while (state->running && wl_display_dispatch(state->display) != -1) {
     // This space intentionally left blank
   }
 }
 
 void wl_ctrl_display_off(struct wl_ctrl *state) {
-    wl_ctrl_display_onoff(state, false);
+  wl_ctrl_display_onoff(state, false);
 }
 
 void wl_ctrl_display_on(struct wl_ctrl *state) {
-    wl_ctrl_display_onoff(state, true);
+  wl_ctrl_display_onoff(state, true);
 }
-
