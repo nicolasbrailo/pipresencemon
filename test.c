@@ -201,37 +201,13 @@ static void apply_state(struct randr_state *state, bool dry_run) {
 
 
 // wlr_output_management will report a lot of properties about the display we don't care about
-static void mode_handle_size(void*, struct zwlr_output_mode_v1*, int32_t, int32_t) {}
-static void mode_handle_refresh(void*, struct zwlr_output_mode_v1*, int32_t) {}
 static void head_handle_physical_size(void*, struct zwlr_output_head_v1*, int32_t, int32_t) {}
 static void head_handle_position(void*, struct zwlr_output_head_v1*, int32_t, int32_t) {}
 static void head_handle_transform(void*, struct zwlr_output_head_v1*, int32_t) {}
 static void head_handle_scale(void*, struct zwlr_output_head_v1*, wl_fixed_t) {}
 static void head_handle_adaptive_sync(void*, struct zwlr_output_head_v1*, uint32_t) {}
-
-
-static void mode_handle_preferred(void *data, struct zwlr_output_mode_v1 *wlr_mode) {
-	struct randr_mode *mode = data;
-	mode->preferred = true;
-}
-
-static void mode_handle_finished(void *data, struct zwlr_output_mode_v1 *wlr_mode) {
-	struct randr_mode *mode = data;
-	wl_list_remove(&mode->link);
-	if (zwlr_output_mode_v1_get_version(mode->wlr_mode) >= 3) {
-		zwlr_output_mode_v1_release(mode->wlr_mode);
-	} else {
-		zwlr_output_mode_v1_destroy(mode->wlr_mode);
-	}
-	free(mode);
-}
-
-static const struct zwlr_output_mode_v1_listener mode_listener = {
-	.size = mode_handle_size,
-	.refresh = mode_handle_refresh,
-	.preferred = mode_handle_preferred,
-	.finished = mode_handle_finished,
-};
+static void head_handle_mode(void*, struct zwlr_output_head_v1*, struct zwlr_output_mode_v1*) {}
+static void head_handle_current_mode(void*, struct zwlr_output_head_v1*, struct zwlr_output_mode_v1*) {}
 
 static void head_handle_name(void *data,
 		struct zwlr_output_head_v1 *wlr_head, const char *name) {
@@ -245,15 +221,11 @@ static void head_handle_description(void *data,
 	head->description = strdup(description);
 }
 
-static void head_handle_mode(void *, struct zwlr_output_head_v1 *, struct zwlr_output_mode_v1 *) {
-}
-
 static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *wlr_head, int32_t enabled) {
 	struct randr_head *head = data;
 	head->enabled = !!enabled;
 }
 
-static void head_handle_current_mode(void*, struct zwlr_output_head_v1*, struct zwlr_output_mode_v1 *) {}
 
 static void head_handle_finished(void *data, struct zwlr_output_head_v1 *wlr_head) {
 	struct randr_head *head = data;
