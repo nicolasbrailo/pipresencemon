@@ -8,7 +8,19 @@ clean:
 	rm -f ./test
 
 
-#CFLAGS=-Wall -Werror -Wextra
+CFLAGS=-Wall -Werror -Wextra \
+       -Wundef \
+       -Wlogical-op \
+       -Wmissing-include-dirs \
+       -Wpointer-arith \
+       -Winit-self \
+       -Wfloat-equal \
+       -Wredundant-decls \
+       -Wimplicit-fallthrough=2 \
+       -Wendif-labels \
+       -Wstrict-aliasing=2 \
+       -Woverflow \
+       -Wformat=2
 
 # Download wl protocol definitions
 wl_protos/wlr-output-management-unstable-v1.xml:
@@ -28,7 +40,7 @@ build/%.o: %.c %.h build
 	$(CC) $(CFLAGS) -isystem ./build $< -c -o $@
 
 test: build/wl_protos/wlr-output-management-unstable-v1.o \
-			build/wl_display.o \
+			build/wl_ctrl.o \
 			build/gpio.o \
 			build/gpio_pin_active_monitor.o \
 			test.c
@@ -41,7 +53,9 @@ screenoff:
 	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --off
 screenon:
 	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --on
+
 system-deps:
+	sudo apt-get install clang-format
 	# wayland headers
 	sudo apt-get install libwayland-dev
 	# wlroots protocol files, needed for wlr-output-power-management-unstable-v1.xml

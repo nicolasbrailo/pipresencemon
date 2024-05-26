@@ -1,7 +1,7 @@
 #include <string.h>
 #include "gpio_pin_active_monitor.h"
 #include "gpio.h"
-#include "wl_display.h"
+#include "wl_ctrl.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -32,7 +32,7 @@ int main() {
         .falling_edge_inactive_threshold=.6,
     };
     struct GpioPinActiveMonitor *mon = gpio_active_monitor_create(args);
-    struct wl_display* display_state = wl_display_init();
+    struct wl_ctrl* display_state = wl_ctrl_init();
     if (!display_state) {
         printf("No display\n");
         return 1;
@@ -41,11 +41,11 @@ int main() {
     bool isOnNow = false;
     while (!gUsrStop) {
         if (gpio_active_monitor_pin_active(mon) && !isOnNow) {
-            wl_display_on(display_state);
+            wl_ctrl_display_on(display_state);
             isOnNow = true;
             printf("PIR reports on %f pct, turn on display\n", gpio_active_monitor_active_pct(mon));
         } else if (!gpio_active_monitor_pin_active(mon) && isOnNow) {
-            wl_display_off(display_state);
+            wl_ctrl_display_off(display_state);
             isOnNow = false;
             printf("PIR reports off %f pct, shutdown display\n", gpio_active_monitor_active_pct(mon));
         } else {
@@ -56,7 +56,7 @@ int main() {
     }
 
     gpio_active_monitor_close(mon);
-    wl_display_free(display_state);
+    wl_ctrl_free(display_state);
     return 0;
 }
 

@@ -5,7 +5,9 @@
 // https://wayland-book.com/registry/binding.html
 // https://git.sr.ht/~emersion/wlr-randr/tree/master/item/main.c
 
-#include "wl_display.h"
+#include "wl_ctrl.h"
+
+#include <strings.h>
 
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
@@ -16,17 +18,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <wayland-client.h>
 
 // Automatically generated from: https://gitlab.freedesktop.org/wlroots/wlr-protocols (see makefile)
 #include "wl_protos/wlr-output-management-unstable-v1.h"
 
-struct wl_display;
+struct wl_ctrl;
 struct randr_head;
 
 struct randr_head {
-	struct wl_display *state;
+	struct wl_ctrl *state;
 	struct zwlr_output_head_v1 *wlr_head;
 	struct wl_list link;
 	char *name, *description;
@@ -34,7 +35,7 @@ struct randr_head {
 	bool enabled;
 };
 
-struct wl_display {
+struct wl_ctrl {
 	struct zwlr_output_manager_v1 *output_manager;
 	struct wl_display *display;
 	struct wl_registry *registry;
@@ -50,14 +51,14 @@ struct wl_display {
 
 static void config_handle_succeeded(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct wl_display *state = data;
+	struct wl_ctrl *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 }
 
 static void config_handle_failed(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct wl_display *state = data;
+	struct wl_ctrl *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 	state->failed = true;
@@ -67,7 +68,7 @@ static void config_handle_failed(void *data,
 
 static void config_handle_cancelled(void *data,
 		struct zwlr_output_configuration_v1 *config) {
-	struct wl_display *state = data;
+	struct wl_ctrl *state = data;
 	zwlr_output_configuration_v1_destroy(config);
 	state->running = false;
 	state->failed = true;
@@ -81,7 +82,7 @@ static const struct zwlr_output_configuration_v1_listener config_listener = {
 	.cancelled = config_handle_cancelled,
 };
 
-static void apply_state(struct wl_display *state, bool dry_run) {
+static void apply_state(struct wl_ctrl *state) {
 	struct zwlr_output_configuration_v1 *config =
 		zwlr_output_manager_v1_create_configuration(state->output_manager,
 		state->serial);
@@ -110,25 +111,23 @@ static void head_handle_adaptive_sync(void*, struct zwlr_output_head_v1*, uint32
 static void head_handle_mode(void*, struct zwlr_output_head_v1*, struct zwlr_output_mode_v1*) {}
 static void head_handle_current_mode(void*, struct zwlr_output_head_v1*, struct zwlr_output_mode_v1*) {}
 
-static void head_handle_name(void *data,
-		struct zwlr_output_head_v1 *wlr_head, const char *name) {
-	struct randr_head *head = data;
-	head->name = strdup(name);
+static void head_handle_name(void *data, struct zwlr_output_head_v1*, const char *name) {
+    struct randr_head *head = data;
+    head->name = strdup(name);
 }
 
-static void head_handle_description(void *data,
-		struct zwlr_output_head_v1 *wlr_head, const char *description) {
+static void head_handle_description(void *data, struct zwlr_output_head_v1*, const char *description) {
 	struct randr_head *head = data;
 	head->description = strdup(description);
 }
 
-static void head_handle_enabled(void *data, struct zwlr_output_head_v1 *wlr_head, int32_t enabled) {
+static void head_handle_enabled(void *data, struct zwlr_output_head_v1*, int32_t enabled) {
 	struct randr_head *head = data;
 	head->enabled = !!enabled;
 }
 
 
-static void head_handle_finished(void *data, struct zwlr_output_head_v1 *wlr_head) {
+static void head_handle_finished(void *data, struct zwlr_output_head_v1*) {
 	struct randr_head *head = data;
 	wl_list_remove(&head->link);
 	if (zwlr_output_head_v1_get_version(head->wlr_head) >= 3) {
@@ -142,19 +141,19 @@ static void head_handle_finished(void *data, struct zwlr_output_head_v1 *wlr_hea
 }
 
 static void head_handle_make(void *data,
-		struct zwlr_output_head_v1 *wlr_head, const char *make) {
+		struct zwlr_output_head_v1 *, const char *make) {
 	struct randr_head *head = data;
 	head->make = strdup(make);
 }
 
 static void head_handle_model(void *data,
-		struct zwlr_output_head_v1 *wlr_head, const char *model) {
+		struct zwlr_output_head_v1 *, const char *model) {
 	struct randr_head *head = data;
 	head->model = strdup(model);
 }
 
 static void head_handle_serial_number(void *data,
-		struct zwlr_output_head_v1 *wlr_head, const char *serial_number) {
+		struct zwlr_output_head_v1 *, const char *serial_number) {
 	struct randr_head *head = data;
 	head->serial_number = strdup(serial_number);
 }
@@ -177,10 +176,9 @@ static const struct zwlr_output_head_v1_listener head_listener = {
 };
 
 static void output_manager_handle_head(void *data,
-		struct zwlr_output_manager_v1 *manager,
+		struct zwlr_output_manager_v1*,
 		struct zwlr_output_head_v1 *wlr_head) {
-	struct wl_display *state = data;
-
+	struct wl_ctrl *state = data;
 	struct randr_head *head = calloc(1, sizeof(*head));
 	head->state = state;
 	head->wlr_head = wlr_head;
@@ -189,15 +187,13 @@ static void output_manager_handle_head(void *data,
 	zwlr_output_head_v1_add_listener(wlr_head, &head_listener, head);
 }
 
-static void output_manager_handle_done(void *data,
-		struct zwlr_output_manager_v1 *manager, uint32_t serial) {
-	struct wl_display *state = data;
+static void output_manager_handle_done(void *data, struct zwlr_output_manager_v1*, uint32_t serial) {
+	struct wl_ctrl *state = data;
 	state->serial = serial;
 	state->has_serial = true;
 }
 
-static void output_manager_handle_finished(void *data,
-		struct zwlr_output_manager_v1 *manager) {
+static void output_manager_handle_finished(void*, struct zwlr_output_manager_v1*) {
 	// This space is intentionally left blank
 }
 
@@ -209,7 +205,7 @@ static const struct zwlr_output_manager_v1_listener output_manager_listener = {
 
 static void registry_handle_global(void *data, struct wl_registry *registry,
 		uint32_t name, const char *interface, uint32_t version) {
-	struct wl_display *state = data;
+	struct wl_ctrl *state = data;
 
 	if (strcmp(interface, zwlr_output_manager_v1_interface.name) == 0) {
 		uint32_t version_to_bind = version <= 4 ? version : 4;
@@ -220,8 +216,7 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
 	}
 }
 
-static void registry_handle_global_remove(void *data,
-		struct wl_registry *registry, uint32_t name) {
+static void registry_handle_global_remove(void*, struct wl_registry*, uint32_t) {
 	// This space is intentionally left blank
 }
 
@@ -233,9 +228,9 @@ static const struct wl_registry_listener registry_listener = {
 
 #define RPI_DEFAULT_WL_DISPLAY_NAME "wayland-1"
 
-struct wl_display* wl_display_init() {
-    struct wl_display* state = malloc(sizeof(struct wl_display));
-    bzero(state, sizeof(struct wl_display));
+struct wl_ctrl* wl_ctrl_init() {
+    struct wl_ctrl* state = malloc(sizeof(struct wl_ctrl));
+    bzero(state, sizeof(struct wl_ctrl));
     state->running = true;
 
 	wl_list_init(&state->heads);
@@ -270,7 +265,7 @@ struct wl_display* wl_display_init() {
         return state;
 }
 
-void wl_display_free(struct wl_display *state) {
+void wl_ctrl_free(struct wl_ctrl *state) {
 	struct randr_head *head, *tmp_head;
 	wl_list_for_each_safe(head, tmp_head, &state->heads, link) {
 		zwlr_output_head_v1_destroy(head->wlr_head);
@@ -287,9 +282,8 @@ void wl_display_free(struct wl_display *state) {
         free(state);
 }
 
-void wl_display_on(struct wl_display *state) {
+void wl_ctrl_display_on(struct wl_ctrl*state) {
         state->running = true;
-	struct randr_head *current_head = NULL;
         {
             struct randr_head *head;
             wl_list_for_each(head, &state->heads, link) {
@@ -302,7 +296,7 @@ void wl_display_on(struct wl_display *state) {
             }
         }
 
-        apply_state(state, false);
+        apply_state(state);
 
 	while (state->running && wl_display_dispatch(state->display) != -1) {
 		// This space intentionally left blank
@@ -310,9 +304,8 @@ void wl_display_on(struct wl_display *state) {
 
 }
 
-void wl_display_off(struct wl_display *state) {
+void wl_ctrl_display_off(struct wl_ctrl *state) {
         state->running = true;
-	struct randr_head *current_head = NULL;
         {
             struct randr_head *head;
             wl_list_for_each(head, &state->heads, link) {
@@ -325,7 +318,7 @@ void wl_display_off(struct wl_display *state) {
             }
         }
 
-        apply_state(state, false);
+        apply_state(state);
 
 	while (state->running && wl_display_dispatch(state->display) != -1) {
 		// This space intentionally left blank
