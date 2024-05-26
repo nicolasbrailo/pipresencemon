@@ -29,14 +29,16 @@ wl_protos/wlr-output-management-unstable-v1.xml:
 		https://gitlab.freedesktop.org/wlroots/wlr-protocols/-/raw/2b8d43325b7012cc3f9b55c08d26e50e42beac7d/unstable/wlr-output-management-unstable-v1.xml?inline=false
 
 # Build glue from wl protocol xml
-build/wl_protos/%.c build/wl_protos/%.h: wl_protos/%.xml build/wl_protos
+build/wl_protos/%.c build/wl_protos/%.h: wl_protos/%.xml
+	mkdir -p  build/wl_protos
 	wayland-scanner private-code < $< > $@
 	wayland-scanner client-header < $< > $(patsubst %.c,%.h,$@)
 
 build build/wl_protos:
 	mkdir -p build/wl_protos
 
-build/%.o: %.c %.h build
+build/%.o: %.c %.h
+	mkdir -p build
 	$(CC) $(CFLAGS) -isystem ./build $< -c -o $@
 
 test: build/wl_protos/wlr-output-management-unstable-v1.o \
