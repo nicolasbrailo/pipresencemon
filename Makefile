@@ -1,31 +1,51 @@
-#CFLAGS=-Wall -Werror -Wextra
-
-.PHONY: run clean system-deps
-
-outman_wproto.h: outman.xml
-	wayland-scanner client-header < $< > $@
-outman_wproto.c: outman.xml
-	wayland-scanner private-code < $< > $@
+.PHONY: run clean
 
 run: test
-	WAYLAND_DISPLAY="wayland-1" ./test
-	#./test
-
-soff:
-	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --off
-son:
-	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --on
+	./test
 
 clean:
-	rm -f *_wproto.* *.o test
+	rm -rf build
+	rm -f ./test
 
-test: gpio.o gpio_pin_active_monitor.o outman_wproto.o wl_display.o outman_wproto.h test.o
+
+#CFLAGS=-Wall -Werror -Wextra
+
+# Download wl protocol definitions
+wl_protos/wlr-output-management-unstable-v1.xml:
+	mkdir -p $(shell dirname "$@")
+	curl --output $@ \
+		https://gitlab.freedesktop.org/wlroots/wlr-protocols/-/raw/2b8d43325b7012cc3f9b55c08d26e50e42beac7d/unstable/wlr-output-management-unstable-v1.xml?inline=false
+
+# Build glue from wl protocol xml
+build/wl_protos/%.c build/wl_protos/%.h: wl_protos/%.xml build/wl_protos
+	wayland-scanner private-code < $< > $@
+	wayland-scanner client-header < $< > $(patsubst %.c,%.h,$@)
+
+build build/wl_protos:
+	mkdir -p build/wl_protos
+
+build/%.o: %.c %.h build
+	$(CC) $(CFLAGS) -isystem ./build $< -c -o $@
+
+test: build/wl_protos/wlr-output-management-unstable-v1.o \
+			build/wl_display.o \
+			build/gpio.o \
+			build/gpio_pin_active_monitor.o \
+			test.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 
+
+# System tests
+.PHONY: system-deps screenoff screenon
+screenoff:
+	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --off
+screenon:
+	WAYLAND_DISPLAY="wayland-1" wlr-randr --output HDMI-A-1 --on
 system-deps:
 	# wayland headers
 	sudo apt-get install libwayland-dev
 	# wlroots protocol files, needed for wlr-output-power-management-unstable-v1.xml
-	sudo apt-get install libwlroots-dev
+	#sudo apt-get install libwlroots-dev
 	# Install protocols.xml into /usr/share/wayland-protocols, not sure if needed
-	sudo apt-get install wayland-protocols
+	#sudo apt-get install wayland-protocols
+

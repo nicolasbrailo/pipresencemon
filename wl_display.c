@@ -18,7 +18,9 @@
 #include <string.h>
 #include <strings.h>
 #include <wayland-client.h>
-#include "outman_wproto.h"
+
+// Automatically generated from: https://gitlab.freedesktop.org/wlroots/wlr-protocols (see makefile)
+#include "wl_protos/wlr-output-management-unstable-v1.h"
 
 struct wl_display;
 struct randr_head;

@@ -1,5 +1,5 @@
 test
-*_wproto.*
+build/*
 
 # Prerequisites
 *.d
