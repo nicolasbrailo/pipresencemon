@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 void gpio_dumpdebug(struct GPIO *gpio) {
   unsigned prev_gpio_in = 0;
@@ -17,11 +18,58 @@ void gpio_dumpdebug(struct GPIO *gpio) {
   }
 }
 
+#define AMBIENCE_NO_MOTION_TIMEOUT 30
+
+enum PresenceState {
+  PRESENCE_USER_INTERACTIVE,
+  PRESENCE_AMBIENCE,
+  PRESENCE_NO,
+};
+
 atomic_bool gUsrStop = false;
 void sighandler(int) { gUsrStop = true; }
 
+void enter_ambience_mode(pid_t* ambience_app_pid) {
+    if (*ambience_app_pid != 0) {
+        return;
+    }
+
+    printf("Launching ambience app...\n");
+    *ambience_app_pid = 42;
+}
+void leave_ambience_mode(pid_t* ambience_app_pid) {
+    if (*ambience_app_pid == 0) {
+        return;
+    }
+    printf("Stopping ambience app...\n");
+    *ambience_app_pid = 0;
+}
+
 int main() {
   signal(SIGINT, sighandler);
+
+  struct wl_ctrl *display_state = wl_ctrl_init("HDMI-A-1");
+  if (!display_state) {
+    printf("No display\n");
+    return 1;
+  }
+
+  // Check init state of display, force activity pin to match display active state
+  bool start_active = true;
+  switch (wl_ctrl_display_query_state(display_state)) {
+  case WL_CTRL_DISPLAYS_UNKNOWN: // fallthrough
+  case WL_CTRL_DISPLAYS_INCONSISTENT:
+    printf("Can't find display state, will try to switch on\n");
+    wl_ctrl_display_on(display_state);
+    // fallthrough
+  case WL_CTRL_DISPLAYS_ON:
+    printf("Managed display is on, assuming initial presence=1\n");
+    break;
+  case WL_CTRL_DISPLAYS_OFF:
+    printf("Managed display is off, assuming initial presence=0\n");
+    start_active = false;
+    break;
+  }
 
   // Because a PIR will be motion based, we want a low threshold and a long history
   struct GpioPinActiveMonitor_args args = {
@@ -30,34 +78,54 @@ int main() {
       .monitor_window_seconds = 30,
       .rising_edge_active_threshold_pct = 20,
       .falling_edge_inactive_threshold_pct = 10,
+      .start_active = start_active,
   };
   struct GpioPinActiveMonitor *mon = gpio_active_monitor_init(args);
   if (!mon) {
+    wl_ctrl_free(display_state);
     return 1;
   }
 
-  struct wl_ctrl *display_state = wl_ctrl_init();
-  if (!display_state) {
-    printf("No display\n");
-    gpio_active_monitor_free(mon);
-    return 1;
-  }
-
-  bool isOnNow = false;
+  enum PresenceState presence = start_active ? PRESENCE_AMBIENCE : PRESENCE_NO;
+  size_t ambienceCountdownSecs = 0;
+  pid_t ambience_app_pid = 0;
   while (!gUsrStop) {
-    if (gpio_active_monitor_pin_active(mon) && !isOnNow) {
-      wl_ctrl_display_on(display_state);
-      isOnNow = true;
-      printf("PIR reports on %f pct, turn on display\n", gpio_active_monitor_active_pct(mon));
-    } else if (!gpio_active_monitor_pin_active(mon) && isOnNow) {
-      wl_ctrl_display_off(display_state);
-      isOnNow = false;
-      printf("PIR reports off %f pct, shutdown display\n", gpio_active_monitor_active_pct(mon));
-    } else {
-      // display state matches wanted state
-      printf("Active? %f / %i\n", gpio_active_monitor_active_pct(mon),
-             gpio_active_monitor_pin_active(mon));
-    }
+    switch (presence) {
+    case PRESENCE_USER_INTERACTIVE:
+      printf("TODO - shouldn't be here\n");
+      presence = PRESENCE_AMBIENCE;
+      ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+      break;
+    case PRESENCE_AMBIENCE:
+      enter_ambience_mode(&ambience_app_pid);
+      if (gpio_active_monitor_pin_active(mon)) {
+        ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+      } else {
+        ambienceCountdownSecs--;
+      }
+      printf("GPIO reports %f%% motion, gpio_state=%s ambienceCountdown=%lu secs\n",
+             100.f * gpio_active_monitor_active_pct(mon),
+             gpio_active_monitor_pin_active(mon) ? "active" : "inactive", ambienceCountdownSecs);
+      if (ambienceCountdownSecs == 0) {
+        printf("Ambience timeout, screen off\n");
+        wl_ctrl_display_off(display_state);
+        presence = PRESENCE_NO;
+      }
+      break;
+    case PRESENCE_NO:
+      leave_ambience_mode(&ambience_app_pid);
+      printf("GPIO reports %f%% motion, gpio_state=%s\n",
+             100.f * gpio_active_monitor_active_pct(mon),
+             gpio_active_monitor_pin_active(mon) ? "active" : "inactive");
+      if (gpio_active_monitor_pin_active(mon)) {
+        printf("Motion detected, moving to ambience mode\n");
+        wl_ctrl_display_on(display_state);
+        presence = PRESENCE_AMBIENCE;
+        ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+      }
+      break;
+    };
+
     sleep(1);
   }
 

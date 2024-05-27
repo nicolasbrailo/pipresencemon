@@ -24,6 +24,11 @@ struct GpioPinActiveMonitor_args {
   // configure rising and falling edges.
   size_t rising_edge_active_threshold_pct;
   size_t falling_edge_inactive_threshold_pct;
+
+  // If true, the service starts on high state. This can be useful to avoid an initial transition of
+  // the active state, if there is another signal that can be used to determine the most likely
+  // start state of the pin.
+  bool start_active;
 };
 
 struct GpioPinActiveMonitor;

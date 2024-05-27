@@ -5,7 +5,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
 #include <unistd.h>
 
 struct GpioPinActiveMonitor {
@@ -76,19 +76,18 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct GpioPinActive
 
   mon->sensor_readings_write_idx = 0;
   mon->sensor_readings_sz = args.monitor_window_seconds / args.sensor_poll_period_secs;
-  mon->active_count_in_window = 0;
+  mon->active_count_in_window = args.start_active ? mon->sensor_readings_sz : 0;
+  mon->currently_active = args.start_active;
   mon->sensor_readings = malloc(sizeof(mon->sensor_readings[0]) * mon->sensor_readings_sz);
   if (!mon->sensor_readings) {
     perror("GpioPinActiveMonitor bad window alloc");
     free(mon);
     return NULL;
   }
-  bzero(mon->sensor_readings, mon->sensor_readings_sz);
+  memset(mon->sensor_readings, args.start_active, mon->sensor_readings_sz);
 
   mon->rising_edge_active_threshold = args.rising_edge_active_threshold_pct / 100.f;
   mon->falling_edge_inactive_threshold = args.falling_edge_inactive_threshold_pct / 100.f;
-
-  mon->currently_active = false;
 
   mon->poll_period_secs = args.sensor_poll_period_secs;
   mon->thread_stop = false;

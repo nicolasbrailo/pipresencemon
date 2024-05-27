@@ -41,6 +41,7 @@ struct wl_ctrl {
   bool has_serial;
   bool running;
   bool failed;
+  char *interesting_screen;
 };
 
 static void config_handle_succeeded(void *data, struct zwlr_output_configuration_v1 *config) {
@@ -176,10 +177,24 @@ static const struct wl_registry_listener registry_listener = {
 
 #define RPI_DEFAULT_WL_DISPLAY_NAME "wayland-1"
 
-struct wl_ctrl *wl_ctrl_init() {
+struct wl_ctrl *wl_ctrl_init(const char *interesting_screen) {
   struct wl_ctrl *state = malloc(sizeof(struct wl_ctrl));
+  if (!state) {
+    fprintf(stderr, "bad alloc wl_ctrl_init\n");
+    return NULL;
+  }
+
   bzero(state, sizeof(struct wl_ctrl));
   state->running = true;
+
+  if (interesting_screen) {
+    state->interesting_screen = strdup(interesting_screen);
+    if (!state->interesting_screen) {
+      fprintf(stderr, "bad alloc wl_ctrl_init\n");
+      free(state);
+      return NULL;
+    }
+  }
 
   wl_list_init(&state->heads);
 
@@ -212,6 +227,25 @@ struct wl_ctrl *wl_ctrl_init() {
       wl_ctrl_free(state);
       return NULL;
     }
+  }
+
+  bool found_screen = false;
+  if (!state->interesting_screen) {
+    found_screen = true;
+  } else {
+    struct wl_head_info *head;
+    wl_list_for_each(head, &state->heads, link) {
+      if (strcmp(state->interesting_screen, head->name) == 0) {
+        found_screen = true;
+      }
+    }
+  }
+
+  if (!found_screen) {
+    fprintf(stderr, "Requested non existent display %s.\n", state->interesting_screen);
+    wl_print_display_names(state);
+    wl_ctrl_free(state);
+    return NULL;
   }
 
   return state;
@@ -251,21 +285,24 @@ static void wl_ctrl_display_onoff(struct wl_ctrl *state, bool shouldTurnOn) {
 
   struct wl_head_info *head;
   wl_list_for_each(head, &state->heads, link) {
-    if (head->enabled && shouldTurnOn) {
-      printf_wl_head_info(head, "Display already on");
-    } else if (head->enabled && !shouldTurnOn) {
-      printf_wl_head_info(head, "Will shutdown");
-      zwlr_output_configuration_v1_disable_head(config, head->wlr_head);
-      head->enabled = false;
-    } else if (!head->enabled && shouldTurnOn) {
-      printf_wl_head_info(head, "Will power on");
-      struct zwlr_output_configuration_head_v1 *config_head =
-          zwlr_output_configuration_v1_enable_head(config, head->wlr_head);
-      zwlr_output_configuration_head_v1_destroy(config_head);
-      head->enabled = true;
-    } else if (!head->enabled && !shouldTurnOn) {
-      printf_wl_head_info(head, "Display already off");
-    }
+      // TODO wl_list_for_each seems to break unless all operations are applied to all heads
+        if (false && state->interesting_screen && strcmp(state->interesting_screen, head->name) != 0) {
+          printf_wl_head_info(head, "Ingore");
+        } else if (head->enabled && shouldTurnOn) {
+          printf_wl_head_info(head, "Display already on");
+        } else if (head->enabled && !shouldTurnOn) {
+          printf_wl_head_info(head, "Will shutdown");
+          zwlr_output_configuration_v1_disable_head(config, head->wlr_head);
+          head->enabled = false;
+        } else if (!head->enabled && shouldTurnOn) {
+          printf_wl_head_info(head, "Will power on");
+          struct zwlr_output_configuration_head_v1 *config_head =
+              zwlr_output_configuration_v1_enable_head(config, head->wlr_head);
+          zwlr_output_configuration_head_v1_destroy(config_head);
+          head->enabled = true;
+        } else if (!head->enabled && !shouldTurnOn) {
+          printf_wl_head_info(head, "Display already off");
+        }
   }
 
   state->running = true;
@@ -278,3 +315,26 @@ static void wl_ctrl_display_onoff(struct wl_ctrl *state, bool shouldTurnOn) {
 void wl_ctrl_display_off(struct wl_ctrl *state) { wl_ctrl_display_onoff(state, false); }
 
 void wl_ctrl_display_on(struct wl_ctrl *state) { wl_ctrl_display_onoff(state, true); }
+
+void wl_print_display_names(struct wl_ctrl *state) {
+  struct wl_head_info *head;
+  printf("Available displays:\n");
+  wl_list_for_each(head, &state->heads, link) { printf_wl_head_info(head, " - "); }
+}
+
+enum WlCtrlDisplayState wl_ctrl_display_query_state(struct wl_ctrl *display_state) {
+  enum WlCtrlDisplayState state = WL_CTRL_DISPLAYS_UNKNOWN;
+  struct wl_head_info *head;
+  wl_list_for_each(head, &display_state->heads, link) {
+    if (!display_state->interesting_screen || strcmp(display_state->interesting_screen, head->name) != 0) {
+        const enum WlCtrlDisplayState head_state =
+            head->enabled ? WL_CTRL_DISPLAYS_ON : WL_CTRL_DISPLAYS_OFF;
+        if (state == WL_CTRL_DISPLAYS_UNKNOWN) {
+          state = head_state;
+        } else if (state != head_state || state == WL_CTRL_DISPLAYS_INCONSISTENT) {
+          state = WL_CTRL_DISPLAYS_INCONSISTENT;
+        }
+    }
+  };
+  return state;
+}
