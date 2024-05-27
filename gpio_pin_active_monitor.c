@@ -49,10 +49,8 @@ static void *gpio_active_monitor_update(void *usr) {
   return NULL;
 }
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init_cfg_from_file(const char *fpath,
-                                                                    bool start_active) {
+struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(void *cfg, bool start_active) {
   struct GpioPinActiveMonitor_args args = {.start_active = start_active};
-  void *cfg = cfg_init(fpath);
 
   bool ok = true;
   ok = ok & cfg_read_size_t(cfg, "sensor_pin", &args.sensor_pin);
@@ -62,7 +60,6 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init_cfg_from_file(const char *
                             &args.rising_edge_active_threshold_pct);
   ok = ok & cfg_read_size_t(cfg, "falling_edge_inactive_threshold_pct",
                             &args.falling_edge_inactive_threshold_pct);
-  cfg_free(cfg);
 
   if (!ok) {
     return NULL;

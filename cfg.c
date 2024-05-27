@@ -74,7 +74,7 @@ bool cfg_read_str(const void *handle, const char *key_name, char **val) {
   while (*end_pos != '\n' && *end_pos != '\0')
     end_pos++;
 
-  int sz = end_pos - start_pos - 1;
+  int sz = end_pos - start_pos;
   if (sz <= 0) {
     fprintf(stderr, "Can't find string value for config key \"%s\"\n", key_name);
     return false;
@@ -87,7 +87,7 @@ bool cfg_read_str(const void *handle, const char *key_name, char **val) {
   }
 
   (*val)[sz] = 0;
-  strncpy(*val, start_pos, sz+1);
+  strncpy(*val, start_pos, sz);
 
   return true;
 }

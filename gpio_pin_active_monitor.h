@@ -33,8 +33,7 @@ struct GpioPinActiveMonitor_args {
 
 struct GpioPinActiveMonitor;
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init_cfg_from_file(const char *fpath,
-                                                                    bool start_active);
+struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(void *cfg, bool start_active);
 struct GpioPinActiveMonitor *gpio_active_monitor_init(struct GpioPinActiveMonitor_args args);
 void gpio_active_monitor_free(struct GpioPinActiveMonitor *mon);
 

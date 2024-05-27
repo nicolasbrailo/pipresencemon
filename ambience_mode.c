@@ -15,23 +15,16 @@ struct AmbienceModeCfg {
   pid_t pid;
 };
 
-struct AmbienceModeCfg *ambience_mode_init(const char *cfgfpath) {
+struct AmbienceModeCfg *ambience_mode_init(void *fcfg) {
   struct AmbienceModeCfg *cfg = malloc(sizeof(struct AmbienceModeCfg));
   if (!cfg) {
-    fprintf(stderr, "ambience_mode_init bad alloc");
+    fprintf(stderr, "ambience_mode_init bad alloc\n");
     return NULL;
   }
 
-  void *fcfg = cfg_init(cfgfpath);
-  if (!fcfg) {
-    fprintf(stderr, "ambience_mode_init can't open config");
-    ambience_mode_free(cfg);
-    return NULL;
-  }
-
+  cfg->pid = 0;
   cfg->cmd = NULL;
   const bool cfg_read = cfg_read_str(fcfg, "ambience_mode_command", &cfg->cmd);
-  cfg_free(fcfg);
 
   if (!cfg_read) {
     fprintf(stderr, "Can't find ambience_mode_command\n");
@@ -80,10 +73,15 @@ void ambience_mode_enter(struct AmbienceModeCfg *cfg) {
     return;
   }
 
-  printf("Launching ambience app: %s\n", cfg->cmd);
+  printf("Launching ambience app: %s ", cfg->cmd);
+  size_t i = 0;
+  while (cfg->args[i]) {
+    printf(" %s", cfg->args[i++]);
+  }
+  printf("\n");
+
   cfg->pid = fork();
   if (cfg->pid == 0) {
-    fprintf(stderr, "CHILD\n");
     execvp(cfg->bin, cfg->args);
     perror("Ambience mode app failed to execve");
   } else if (cfg->pid < 0) {

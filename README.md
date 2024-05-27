@@ -14,3 +14,9 @@ The sensor should be connected to GPIO26 / pin 37. Today, the GPIO is hardcoded 
 * To build, `make pipresencemon`
 * To regen Wayland protocols, `rm wl_protos` and then `make clean pipresencemon`. It will flawlessly, at least 50% of the time.
 
+# TODO
+* Figure out why managing a single display in a multiple display setup breaks
+* Capture user interaction for interactive mode
+* Hook to dbus to capture wakelock and bcast ambient mode
+
+

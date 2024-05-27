@@ -1,8 +1,8 @@
 #include "ambience_mode.h"
+#include "cfg.h"
 #include "gpio.h"
 #include "gpio_pin_active_monitor.h"
 #include "wl_ctrl.h"
-#include "cfg.h"
 
 #include <signal.h>
 #include <stdatomic.h>
@@ -22,8 +22,6 @@ void gpio_dumpdebug(struct GPIO *gpio) {
   }
 }
 
-#define AMBIENCE_NO_MOTION_TIMEOUT 30
-
 enum PresenceState {
   PRESENCE_USER_INTERACTIVE,
   PRESENCE_AMBIENCE,
@@ -34,13 +32,24 @@ atomic_bool gUsrStop = false;
 void sighandler(int) { gUsrStop = true; }
 
 int main() {
-  struct AmbienceModeCfg *ambience_cfg = ambience_mode_init(CFG_FNAME);
-  struct wl_ctrl *display_state = wl_ctrl_init(NULL);
+  void *config = cfg_init(CFG_FNAME);
+  if (!config) {
+    fprintf(stderr, "Can't open config file %s\n", CFG_FNAME);
+    return 1;
+  }
 
-  if (!ambience_cfg || !display_state) {
+  size_t NO_PRESENCE_MOTION_TIMEOUT_SECONDS;
+  bool config_ok = true;
+  config_ok = config_ok & cfg_read_size_t(config, "no_presence_motion_timeout_seconds",
+                                          &NO_PRESENCE_MOTION_TIMEOUT_SECONDS);
+
+  struct AmbienceModeCfg *ambience_cfg = ambience_mode_init(config);
+  struct wl_ctrl *display_state = wl_ctrl_init(NULL);
+  if (!ambience_cfg || !display_state || !config_ok) {
     fprintf(stderr, "Failed to startup\n");
     wl_ctrl_free(display_state);
     ambience_mode_free(ambience_cfg);
+    cfg_free(config);
     return 1;
   }
 
@@ -61,14 +70,15 @@ int main() {
     break;
   }
 
-  struct GpioPinActiveMonitor *gpio_mon =
-      gpio_active_monitor_init_cfg_from_file(CFG_FNAME, start_active);
+  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init_from_cfg(config, start_active);
   if (!gpio_mon) {
     fprintf(stderr, "Failed to monitor gpio on startup\n");
     wl_ctrl_free(display_state);
     ambience_mode_free(ambience_cfg);
     return 1;
   }
+
+  cfg_free(config);
 
   enum PresenceState presence = start_active ? PRESENCE_AMBIENCE : PRESENCE_NO;
   size_t ambienceCountdownSecs = 0;
@@ -78,12 +88,12 @@ int main() {
     case PRESENCE_USER_INTERACTIVE:
       printf("TODO - shouldn't be here\n");
       presence = PRESENCE_AMBIENCE;
-      ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+      ambienceCountdownSecs = NO_PRESENCE_MOTION_TIMEOUT_SECONDS;
       break;
     case PRESENCE_AMBIENCE:
       ambience_mode_enter(ambience_cfg);
       if (gpio_active_monitor_pin_active(gpio_mon)) {
-        ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+        ambienceCountdownSecs = NO_PRESENCE_MOTION_TIMEOUT_SECONDS;
       } else {
         ambienceCountdownSecs--;
       }
@@ -106,7 +116,7 @@ int main() {
         printf("Motion detected, moving to ambience mode\n");
         wl_ctrl_display_on(display_state);
         presence = PRESENCE_AMBIENCE;
-        ambienceCountdownSecs = AMBIENCE_NO_MOTION_TIMEOUT;
+        ambienceCountdownSecs = NO_PRESENCE_MOTION_TIMEOUT_SECONDS;
       }
       break;
     };
