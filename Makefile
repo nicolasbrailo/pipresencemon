@@ -45,6 +45,8 @@ pipresencemon: build/wl_protos/wlr-output-management-unstable-v1.o \
 			build/wl_ctrl.o \
 			build/gpio.o \
 			build/gpio_pin_active_monitor.o \
+			build/cfg.o \
+			build/ambience_mode.o \
 			pipresencemon.c
 	$(CC) $(CFLAGS) $^ -o $@ -lwayland-client
 

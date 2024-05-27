@@ -1,4 +1,5 @@
 #include "gpio_pin_active_monitor.h"
+#include "cfg.h"
 #include "gpio.h"
 
 #include <pthread.h>
@@ -46,6 +47,28 @@ static void *gpio_active_monitor_update(void *usr) {
     sleep(mon->poll_period_secs);
   }
   return NULL;
+}
+
+struct GpioPinActiveMonitor *gpio_active_monitor_init_cfg_from_file(const char *fpath,
+                                                                    bool start_active) {
+  struct GpioPinActiveMonitor_args args = {.start_active = start_active};
+  void *cfg = cfg_init(fpath);
+
+  bool ok = true;
+  ok = ok & cfg_read_size_t(cfg, "sensor_pin", &args.sensor_pin);
+  ok = ok & cfg_read_size_t(cfg, "sensor_poll_period_secs", &args.sensor_poll_period_secs);
+  ok = ok & cfg_read_size_t(cfg, "monitor_window_seconds", &args.monitor_window_seconds);
+  ok = ok & cfg_read_size_t(cfg, "rising_edge_active_threshold_pct",
+                            &args.rising_edge_active_threshold_pct);
+  ok = ok & cfg_read_size_t(cfg, "falling_edge_inactive_threshold_pct",
+                            &args.falling_edge_inactive_threshold_pct);
+  cfg_free(cfg);
+
+  if (!ok) {
+    return NULL;
+  }
+
+  return gpio_active_monitor_init(args);
 }
 
 struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct GpioPinActiveMonitor_args args) {
@@ -102,6 +125,10 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct GpioPinActive
 }
 
 void gpio_active_monitor_free(struct GpioPinActiveMonitor *mon) {
+  if (!mon) {
+    return;
+  }
+
   mon->thread_stop = true;
   if (pthread_join(mon->thread_id, NULL) != 0) {
     perror("GpioPinActiveMonitor pthread_join fail");
