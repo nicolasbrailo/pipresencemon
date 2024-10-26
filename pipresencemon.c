@@ -1,8 +1,6 @@
-#include "ambience_mode.h"
 #include "cfg.h"
-#include "gpio.h"
 #include "gpio_pin_active_monitor.h"
-#include "wl_ctrl.h"
+#include "occupancy_commands.h"
 
 #include <signal.h>
 #include <stdatomic.h>
@@ -12,38 +10,55 @@
 #include <string.h>
 #include <unistd.h>
 
-#define CFG_FNAME "pipresencemon.cfg"
-
-void gpio_dumpdebug(struct GPIO *gpio) {
-  unsigned prev_gpio_in = 0;
-  while (1) {
-    prev_gpio_in = gpio_get_and_print_delta(gpio, prev_gpio_in);
-    sleep(1);
-  }
-}
-
-enum PresenceState {
-  PRESENCE_USER_INTERACTIVE,
-  PRESENCE_AMBIENCE,
-  PRESENCE_NO,
-};
+#define DEFAULT_CFG_FNAME "pipresencemon.cfg"
 
 atomic_bool gUsrStop = false;
 void sighandler(int) { gUsrStop = true; }
 
-int main() {
-  void *config = cfg_init(CFG_FNAME);
-  if (!config) {
-    fprintf(stderr, "Can't open config file %s\n", CFG_FNAME);
+int main(int argc, const char** argv) {
+  const char* cfg_fname = DEFAULT_CFG_FNAME;
+  if (argc > 1) {
+      cfg_fname = argv[1];
+  }
+
+  struct Config cfg;
+  if (!cfg_read(cfg_fname, &cfg)) {
+    fprintf(stderr, "Can't open config file %s\n", cfg_fname);
+    return 1;
+  }
+  cfg_debug(&cfg);
+
+  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init_from_cfg(&cfg, /*start_active=*/true);
+  if (!gpio_mon) {
+    fprintf(stderr, "Failed to monitor gpio on startup\n");
     return 1;
   }
 
-  size_t NO_PRESENCE_MOTION_TIMEOUT_SECONDS;
-  bool config_ok = true;
-  config_ok = config_ok & cfg_read_size_t(config, "no_presence_motion_timeout_seconds",
-                                          &NO_PRESENCE_MOTION_TIMEOUT_SECONDS);
+  struct OccupancyCommands *occupancy_cmds = occupancy_commands_init(&cfg);
+  if (!occupancy_cmds) {
+      free(gpio_mon);
+      return 1;
+  }
 
-  struct AmbienceModeCfg *ambience_cfg = ambience_mode_init(config);
+  signal(SIGINT, sighandler);
+  while (!gUsrStop) {
+    const bool occupancy = gpio_active_monitor_pin_active(gpio_mon);
+    if (occupancy) {
+      printf("Occupancy detected by GPIO sensor\n");
+      occupancy_commands_on_occupancy(occupancy_cmds);
+    } else {
+      printf("No occupancy detected by GPIO sensor\n");
+      occupancy_commands_on_vacancy(occupancy_cmds);
+    }
+    sleep(1);
+  }
+
+  occupancy_commands_free(occupancy_cmds);
+  gpio_active_monitor_free(gpio_mon);
+
+  return 0;
+
+#if 0
   struct wl_ctrl *display_state = wl_ctrl_init(NULL);
   if (!ambience_cfg || !display_state || !config_ok) {
     fprintf(stderr, "Failed to startup\n");
@@ -70,15 +85,6 @@ int main() {
     break;
   }
 
-  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init_from_cfg(config, start_active);
-  if (!gpio_mon) {
-    fprintf(stderr, "Failed to monitor gpio on startup\n");
-    wl_ctrl_free(display_state);
-    ambience_mode_free(ambience_cfg);
-    return 1;
-  }
-
-  cfg_free(config);
 
   enum PresenceState presence = start_active ? PRESENCE_AMBIENCE : PRESENCE_NO;
   size_t ambienceCountdownSecs = 0;
@@ -124,9 +130,16 @@ int main() {
     sleep(1);
   }
 
-  gpio_active_monitor_free(gpio_mon);
   wl_ctrl_free(display_state);
-  ambience_mode_free(ambience_cfg);
+
+
+
+enum PresenceState {
+  PRESENCE_USER_INTERACTIVE,
+  PRESENCE_AMBIENCE,
+  PRESENCE_NO,
+};
+#endif
 
   return 0;
 }

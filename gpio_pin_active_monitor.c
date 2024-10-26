@@ -1,6 +1,6 @@
 #include "gpio_pin_active_monitor.h"
-#include "cfg.h"
 #include "gpio.h"
+#include "cfg.h"
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -49,21 +49,15 @@ static void *gpio_active_monitor_update(void *usr) {
   return NULL;
 }
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(void *cfg, bool start_active) {
-  struct GpioPinActiveMonitor_args args = {.start_active = start_active};
-
-  bool ok = true;
-  ok = ok & cfg_read_size_t(cfg, "sensor_pin", &args.sensor_pin);
-  ok = ok & cfg_read_size_t(cfg, "sensor_poll_period_secs", &args.sensor_poll_period_secs);
-  ok = ok & cfg_read_size_t(cfg, "monitor_window_seconds", &args.monitor_window_seconds);
-  ok = ok & cfg_read_size_t(cfg, "rising_edge_active_threshold_pct",
-                            &args.rising_edge_active_threshold_pct);
-  ok = ok & cfg_read_size_t(cfg, "falling_edge_inactive_threshold_pct",
-                            &args.falling_edge_inactive_threshold_pct);
-
-  if (!ok) {
-    return NULL;
-  }
+struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(const struct Config *cfg, bool start_active) {
+  struct GpioPinActiveMonitor_args args = {
+      .start_active = start_active,
+      .sensor_pin = cfg->sensor_pin,
+      .sensor_poll_period_secs = cfg->sensor_poll_period_secs,
+      .monitor_window_seconds = cfg->sensor_monitor_window_seconds,
+      .rising_edge_active_threshold_pct = cfg->rising_edge_ocupancy_threshold_pct,
+      .falling_edge_inactive_threshold_pct = cfg->falling_edge_vacancy_threshold_pct,
+  };
 
   return gpio_active_monitor_init(args);
 }

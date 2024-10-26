@@ -3,11 +3,13 @@
 #include "gpio.h"
 
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
+#define MOCK true
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13
@@ -23,6 +25,10 @@ struct GPIO *gpio_open() {
   if (!gpio) {
     perror("GPIO bad alloc");
     return NULL;
+  }
+
+  if (MOCK) {
+      return gpio;
   }
 
   gpio->fd = open(gpio_path, O_RDWR);
@@ -42,10 +48,17 @@ struct GPIO *gpio_open() {
     return NULL;
   }
 
+  (void)gpio->mem[GPIO_INPUTS];
+
   return gpio;
 }
 
 void gpio_close(struct GPIO *gpio) {
+  if (MOCK) {
+      free(gpio);
+      return;
+  }
+
   if (!gpio) {
     return;
   }
@@ -61,9 +74,19 @@ void gpio_close(struct GPIO *gpio) {
   free(gpio);
 }
 
-bool gpio_get_pin(struct GPIO *gpio, size_t pin) { return gpio->mem[GPIO_INPUTS] & (1 << pin); }
+bool gpio_get_pin(struct GPIO *gpio, size_t pin) { 
+    if (MOCK) { return true; }
 
-gpio_reg_t gpio_get_inputs(struct GPIO *gpio) { return gpio->mem[GPIO_INPUTS]; }
+    return gpio->mem[GPIO_INPUTS] & (1 << pin);
+}
+
+gpio_reg_t gpio_get_inputs(struct GPIO *gpio) {
+    if (MOCK) {
+        return -1;
+    }
+
+    return gpio->mem[GPIO_INPUTS];
+}
 
 #define COL_NOO "\x1B[0m"
 #define COL_RED "\x1B[31m"
