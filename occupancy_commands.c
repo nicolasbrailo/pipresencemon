@@ -20,6 +20,7 @@ struct OccupancyTransitionCommand {
   // Array of ptrs to args (eg "one two three")
   char **args;
   pid_t pid;
+  bool should_restart;
 };
 
 enum CurrentState {
@@ -30,6 +31,7 @@ enum CurrentState {
 
 struct OccupancyCommands {
     enum CurrentState current_state;
+    bool should_restart_on_crash;
 
     size_t on_occupancy_cmds_read;
     size_t on_occupancy_cmds_cnt;
@@ -55,6 +57,7 @@ static size_t count_argc(const char* cmd) {
 
 static bool parse_transition_cmd_from_cfg(const char* cmd, struct OccupancyTransitionCommand* cmd_cfg) {
   cmd_cfg->pid = 0;
+  cmd_cfg->should_restart = false;
   cmd_cfg->cmd = malloc((1 + strlen(cmd)) * sizeof(char));
   if (!cmd_cfg->cmd) goto ALLOC_ERR;
   strcpy(cmd_cfg->cmd, cmd);
@@ -99,7 +102,7 @@ static void parse_occupancy_cmds_from_cfg(void* usr, const char* cmd) {
   if (parse_ok) self->on_occupancy_cmds_read++;
 }
 
-static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds) {
+static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, bool should_restart_on_crash) {
   for (size_t cmd_i=0; cmd_i < sz; ++cmd_i) {
     if (cmds[cmd_i].pid != 0) {
       printf("Error launching command %s: already launched with pid %d\n", cmds[cmd_i].bin, cmds[cmd_i].pid);
@@ -113,6 +116,7 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds) 
     }
     printf("\n");
 
+    cmds[cmd_i].should_restart = should_restart_on_crash;
     cmds[cmd_i].pid = fork();
     if (cmds[cmd_i].pid == 0) {
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
@@ -127,6 +131,8 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds) 
 
 static void stop_commands(size_t sz, struct OccupancyTransitionCommand* cmds) {
   for (size_t cmd_i=0; cmd_i < sz; ++cmd_i) {
+    cmds[cmd_i].should_restart = false;
+
     if (cmds[cmd_i].pid == 0) {
       printf("Warning: try stopping command %s, but is not running\n", cmds[cmd_i].bin);
       continue;
@@ -162,7 +168,9 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand* 
   for (size_t i=0; i < sz; ++i) {
     if (pid == cmds[i].pid) {
       printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
-      printf("TODO: RELAUNCH\n"); // XXX TODO
+      if (cmds[i].should_restart) {
+          printf("TODO: RELAUNCH\n"); // XXX TODO
+      }
       cmds[i].pid = 0;
       return true;
     }
@@ -208,6 +216,7 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   }
 
   self->current_state = STATE_INVALID;
+  self->should_restart_on_crash = cfg->restart_cmd_on_unexpected_exit;
 
   self->on_occupancy_cmds_cnt = cfg->on_occupancy_cmds_cnt;
   self->on_occupancy_cmds_read = 0;
@@ -282,7 +291,7 @@ void occupancy_commands_on_occupancy(struct OccupancyCommands* self) {
 
     self->current_state = STATE_OCCUPIED;
     stop_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds);
-    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds);
+    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self->should_restart_on_crash);
 }
 
 void occupancy_commands_on_vacancy(struct OccupancyCommands* self) {
@@ -293,6 +302,6 @@ void occupancy_commands_on_vacancy(struct OccupancyCommands* self) {
 
     self->current_state = STATE_VACANT;
     stop_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds);
-    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds);
+    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self->should_restart_on_crash);
 }
 

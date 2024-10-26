@@ -22,6 +22,9 @@ struct Config {
     // Minimum timeout before declaring no-presence
     size_t vacancy_motion_timeout_seconds;
 
+    // Restart child cmds on crash
+    bool restart_cmd_on_unexpected_exit;
+
     // Commands to be executed when transitioning from no-presence to presence
     size_t on_occupancy_cmds_cnt;
     char on_occupancy_cmds[500];

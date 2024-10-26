@@ -55,7 +55,7 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(const struct Conf
       .sensor_pin = cfg->sensor_pin,
       .sensor_poll_period_secs = cfg->sensor_poll_period_secs,
       .monitor_window_seconds = cfg->sensor_monitor_window_seconds,
-      .rising_edge_active_threshold_pct = cfg->rising_edge_ocupancy_threshold_pct,
+      .rising_edge_active_threshold_pct = cfg->rising_edge_occupancy_threshold_pct,
       .falling_edge_inactive_threshold_pct = cfg->falling_edge_vacancy_threshold_pct,
   };
 

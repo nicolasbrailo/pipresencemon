@@ -90,6 +90,24 @@ static int cfg_read_str(const void *handle, const char *key_name, char *val, siz
   return sz+1;
 }
 
+static bool cfg_read_bool(const void *handle, const char *key_name, bool* val) {
+  char buff[100];
+  size_t read = cfg_read_str(handle, key_name, buff, sizeof(buff));
+  if (read <= 0) {
+      return false;
+  }
+
+  if (strcmp(buff, "true") == 0) {
+      *val = true;
+      return true;
+  } else if (strcmp(buff, "false") == 0) {
+      *val = false;
+      return true;
+  }
+
+  return false;
+}
+
 static int cfg_read_str_arr(void* h, const char key_root[], char* buff, size_t buff_sz) {
     memset(buff, 0, buff_sz);
     size_t offset = 0;
@@ -137,6 +155,7 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
     ok &= cfg_read_size_t(h, "rising_edge_occupancy_threshold_pct", &cfg->rising_edge_occupancy_threshold_pct);
     ok &= cfg_read_size_t(h, "falling_edge_vacancy_threshold_pct", &cfg->falling_edge_vacancy_threshold_pct);
     ok &= cfg_read_size_t(h, "vacancy_motion_timeout_seconds", &cfg->vacancy_motion_timeout_seconds);
+    ok &= cfg_read_bool(h, "restart_cmd_on_unexpected_exit", &cfg->restart_cmd_on_unexpected_exit);
 
     {
         int read_cnt = cfg_read_str_arr(h, "on_occupancy_cmd", cfg->on_occupancy_cmds, sizeof(cfg->on_occupancy_cmds));

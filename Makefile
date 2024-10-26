@@ -7,7 +7,8 @@ clean:
 	rm -rf build
 	rm -f ./pipresencemon
 
-CFLAGS=-Wall -Werror -Wextra \
+CFLAGS=-ggdb \
+		   -Wall -Werror -Wextra \
        -Wundef \
        -Wlogical-op \
        -Wmissing-include-dirs \
