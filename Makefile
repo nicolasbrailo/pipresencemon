@@ -6,17 +6,20 @@ run: pipresencemon
 clean:
 	rm -rf build
 	rm -f ./pipresencemon
+	rm -f ./example_svc
 
+XCOMPILE=-target arm-linux-gnueabihf \
+				 -mcpu=arm1176jzf-s \
+				 --sysroot ./mnt/ 
 CFLAGS=-ggdb \
 		   -Wall -Werror -Wextra \
        -Wundef \
-       -Wlogical-op \
        -Wmissing-include-dirs \
        -Wpointer-arith \
        -Winit-self \
        -Wfloat-equal \
        -Wredundant-decls \
-       -Wimplicit-fallthrough=2 \
+       -Wimplicit-fallthrough \
        -Wendif-labels \
        -Wstrict-aliasing=2 \
        -Woverflow \
@@ -24,19 +27,23 @@ CFLAGS=-ggdb \
 
 build/%.o: %.c %.h
 	mkdir -p build
-	$(CC) $(CFLAGS) -isystem ./build $< -c -o $@
+	@if [ ! -d mnt/lib/raspberrypi-sys-mods ]; then \
+		echo "xcompiler sysroot not detected, try `make xcompile-start`"; \
+		@exit 1; \
+	fi ;
+	clang $(XCOMPILE) $(CFLAGS) $< -c -o $@
 
 pipresencemon: build/gpio.o \
 			build/gpio_pin_active_monitor.o \
 			build/cfg.o \
 			build/occupancy_commands.o \
 			pipresencemon.c
-	$(CC) $(CFLAGS) $^ -o $@
+	clang $(XCOMPILE) $(CFLAGS) $^ -o $@
 
 example_svc: example_svc.c
 	$(CC) $(CFLAGS) $^ -o $@
 
-.PHONY: format formatall
+.PHONY: format formatall xcompile-start xcompile-end deploytgt
 format:
 	git clang-format
 
@@ -46,4 +53,14 @@ formatall:
 
 system-deps:
 	sudo apt-get install clang-format
+
+xcompile-start:
+	./rpiz-xcompile/mount_rpy_root.sh
+
+xcompile-end:
+	./rpiz-xcompile/umount_rpy_root.sh
+
+deploytgt: pipresencemon pipresencemon.cfg
+	scp ./pipresencemon batman@10.0.0.146:/home/batman/pipresencemon/
+	scp ./pipresencemon.cfg batman@10.0.0.146:/home/batman/pipresencemon/
 

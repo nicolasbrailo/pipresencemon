@@ -9,7 +9,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define MOCK true
+#define MOCK false
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13
@@ -104,7 +104,7 @@ gpio_reg_t gpio_get_inputs(struct GPIO *gpio) {
 gpio_reg_t gpio_get_and_print_delta(struct GPIO *gpio, gpio_reg_t prev_gpio_reg) {
   printf("%s ", COL_NOO);
   for (size_t i = 0; i < GPIO_PINS; ++i) {
-    printf("P%02lu ", i);
+    printf("P%02zu ", i);
   }
   printf("\n");
 

@@ -13,7 +13,7 @@
 #define DEFAULT_CFG_FNAME "pipresencemon.cfg"
 
 atomic_bool gUsrStop = false;
-void sighandler(int) { gUsrStop = true; }
+void sighandler(int _unused __attribute__((unused))) { gUsrStop = true; }
 
 int main(int argc, const char **argv) {
   const char *cfg_fname = DEFAULT_CFG_FNAME;

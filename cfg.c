@@ -54,7 +54,7 @@ static bool cfg_read_size_t(const void *handle, const char *key_name, size_t *va
     return false;
   }
 
-  if (sscanf(start_pos, "%lu\n", val) == 1) {
+  if (sscanf(start_pos, "%zu\n", val) == 1) {
     return true;
   }
 
@@ -209,8 +209,8 @@ void cfg_each_cmd(const char *cmds, cfg_each_cmd_cb_t cb, void *usr) {
   }
 }
 
-static void dbg_on_occupancy_cmds(void *, const char *cmd) { printf("on_occupancy_cmd=%s\n", cmd); }
-static void dbg_on_vacancy_cmds(void *, const char *cmd) { printf("on_vacancy_cmd=%s\n", cmd); }
+static void dbg_on_occupancy_cmds(void * _unused __attribute__((unused)), const char *cmd) { printf("on_occupancy_cmd=%s\n", cmd); }
+static void dbg_on_vacancy_cmds(void * _unused __attribute__((unused)), const char *cmd) { printf("on_vacancy_cmd=%s\n", cmd); }
 
 void cfg_debug(const struct Config *cfg) {
   printf("Config debug\n");

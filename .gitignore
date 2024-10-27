@@ -1,6 +1,9 @@
 pipresencemon
 example_svc
 build/*
+mnt/*
+gpio_mock
+*raspios-bookworm-armhf.img
 
 # Prerequisites
 *.d

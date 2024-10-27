@@ -75,7 +75,7 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) 
   const bool start_active = true;
 
   if (cfg->sensor_pin > GPIO_PINS) {
-    fprintf(stderr, "Invalid pin number %lu (max %lu)\n", cfg->sensor_pin, GPIO_PINS);
+    fprintf(stderr, "Invalid pin number %zu (max %zu)\n", cfg->sensor_pin, GPIO_PINS);
     return NULL;
   }
 
