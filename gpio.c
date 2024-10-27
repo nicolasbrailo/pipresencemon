@@ -28,7 +28,7 @@ struct GPIO *gpio_open() {
   }
 
   if (MOCK) {
-      return gpio;
+    return gpio;
   }
 
   gpio->fd = open(gpio_path, O_RDWR);
@@ -55,8 +55,8 @@ struct GPIO *gpio_open() {
 
 void gpio_close(struct GPIO *gpio) {
   if (MOCK) {
-      free(gpio);
-      return;
+    free(gpio);
+    return;
   }
 
   if (!gpio) {
@@ -74,18 +74,20 @@ void gpio_close(struct GPIO *gpio) {
   free(gpio);
 }
 
-bool gpio_get_pin(struct GPIO *gpio, size_t pin) { 
-    if (MOCK) { return true; }
+bool gpio_get_pin(struct GPIO *gpio, size_t pin) {
+  if (MOCK) {
+    return true;
+  }
 
-    return gpio->mem[GPIO_INPUTS] & (1 << pin);
+  return gpio->mem[GPIO_INPUTS] & (1 << pin);
 }
 
 gpio_reg_t gpio_get_inputs(struct GPIO *gpio) {
-    if (MOCK) {
-        return -1;
-    }
+  if (MOCK) {
+    return -1;
+  }
 
-    return gpio->mem[GPIO_INPUTS];
+  return gpio->mem[GPIO_INPUTS];
 }
 
 #define COL_NOO "\x1B[0m"

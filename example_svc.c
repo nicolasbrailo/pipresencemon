@@ -7,13 +7,12 @@
 atomic_bool gUsrStop = false;
 void sighandler(int) { gUsrStop = true; }
 
-int main(int , const char** argv) {
+int main(int, const char **argv) {
   signal(SIGINT, sighandler);
-  size_t cnt=0;
+  size_t cnt = 0;
   while (!gUsrStop) {
     printf("HELLO FROM SAMPLE SVC %s %s - CNT %zu\n", argv[0], argv[1], cnt++);
     sleep(1);
   }
   return 0;
 }
-

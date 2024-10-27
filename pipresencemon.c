@@ -15,10 +15,10 @@
 atomic_bool gUsrStop = false;
 void sighandler(int) { gUsrStop = true; }
 
-int main(int argc, const char** argv) {
-  const char* cfg_fname = DEFAULT_CFG_FNAME;
+int main(int argc, const char **argv) {
+  const char *cfg_fname = DEFAULT_CFG_FNAME;
   if (argc > 1) {
-      cfg_fname = argv[1];
+    cfg_fname = argv[1];
   }
 
   struct Config cfg;
@@ -28,7 +28,8 @@ int main(int argc, const char** argv) {
   }
   cfg_debug(&cfg);
 
-  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init_from_cfg(&cfg, /*start_active=*/true);
+  struct GpioPinActiveMonitor *gpio_mon =
+      gpio_active_monitor_init_from_cfg(&cfg, /*start_active=*/true);
   if (!gpio_mon) {
     fprintf(stderr, "Failed to monitor gpio on startup\n");
     return 1;
@@ -36,8 +37,8 @@ int main(int argc, const char** argv) {
 
   struct OccupancyCommands *occupancy_cmds = occupancy_commands_init(&cfg);
   if (!occupancy_cmds) {
-      free(gpio_mon);
-      return 1;
+    free(gpio_mon);
+    return 1;
   }
 
   signal(SIGINT, sighandler);

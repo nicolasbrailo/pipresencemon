@@ -1,6 +1,6 @@
 #include "gpio_pin_active_monitor.h"
-#include "gpio.h"
 #include "cfg.h"
+#include "gpio.h"
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -49,7 +49,8 @@ static void *gpio_active_monitor_update(void *usr) {
   return NULL;
 }
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(const struct Config *cfg, bool start_active) {
+struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(const struct Config *cfg,
+                                                               bool start_active) {
   struct GpioPinActiveMonitor_args args = {
       .start_active = start_active,
       .sensor_pin = cfg->sensor_pin,

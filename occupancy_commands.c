@@ -25,30 +25,29 @@ struct OccupancyTransitionCommand {
 };
 
 enum CurrentState {
-    STATE_INVALID,
-    STATE_OCCUPIED,
-    STATE_VACANT,
+  STATE_INVALID,
+  STATE_OCCUPIED,
+  STATE_VACANT,
 };
 
 struct OccupancyCommands {
-    enum CurrentState current_state;
-    bool restart_cmd_on_unexpected_exit;
-    size_t restart_cmd_wait_time_seconds;
+  enum CurrentState current_state;
+  bool restart_cmd_on_unexpected_exit;
+  size_t restart_cmd_wait_time_seconds;
 
-    size_t on_occupancy_cmds_read;
-    size_t on_occupancy_cmds_cnt;
-    struct OccupancyTransitionCommand* on_occupancy_cmds;
+  size_t on_occupancy_cmds_read;
+  size_t on_occupancy_cmds_cnt;
+  struct OccupancyTransitionCommand *on_occupancy_cmds;
 
-    size_t on_vacancy_cmds_read;
-    size_t on_vacancy_cmds_cnt;
-    struct OccupancyTransitionCommand* on_vacancy_cmds;
+  size_t on_vacancy_cmds_read;
+  size_t on_vacancy_cmds_cnt;
+  struct OccupancyTransitionCommand *on_vacancy_cmds;
 };
 
 // Non null if the SIGCHLD handler has been set
-struct OccupancyCommands* g_sigchld_handler = NULL;
+struct OccupancyCommands *g_sigchld_handler = NULL;
 
-
-static size_t count_argc(const char* cmd) {
+static size_t count_argc(const char *cmd) {
   size_t argc = 0;
   for (size_t i = 0; cmd[i] != '\0'; ++i) {
     if (cmd[i] == ' ')
@@ -57,17 +56,20 @@ static size_t count_argc(const char* cmd) {
   return argc;
 }
 
-static bool parse_transition_cmd_from_cfg(const char* cmd, struct OccupancyTransitionCommand* cmd_cfg) {
+static bool parse_transition_cmd_from_cfg(const char *cmd,
+                                          struct OccupancyTransitionCommand *cmd_cfg) {
   cmd_cfg->pid = 0;
   cmd_cfg->should_restart = false;
   cmd_cfg->cmd = malloc((1 + strlen(cmd)) * sizeof(char));
-  if (!cmd_cfg->cmd) goto ALLOC_ERR;
+  if (!cmd_cfg->cmd)
+    goto ALLOC_ERR;
   strcpy(cmd_cfg->cmd, cmd);
 
   const size_t argc = count_argc(cmd_cfg->cmd);
   cmd_cfg->args = malloc((argc + 1) * sizeof(void *));
-  if (!cmd_cfg->args) goto ALLOC_ERR;
-  cmd_cfg->args[argc] = NULL; 
+  if (!cmd_cfg->args)
+    goto ALLOC_ERR;
+  cmd_cfg->args[argc] = NULL;
 
   {
     size_t i = 0;
@@ -88,39 +90,44 @@ ALLOC_ERR:
   return false;
 }
 
-static void parse_vacancy_cmds_from_cfg(void *usr, const char* cmd) {
+static void parse_vacancy_cmds_from_cfg(void *usr, const char *cmd) {
   struct OccupancyCommands *self = usr;
-  struct OccupancyTransitionCommand * cmd_cfg = &self->on_vacancy_cmds[self->on_vacancy_cmds_read];
+  struct OccupancyTransitionCommand *cmd_cfg = &self->on_vacancy_cmds[self->on_vacancy_cmds_read];
   const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg);
   // On fail, don't increase counter. This will make the ambience mode validation init fail later
-  if (parse_ok) self->on_vacancy_cmds_read++;
+  if (parse_ok)
+    self->on_vacancy_cmds_read++;
 }
 
-static void parse_occupancy_cmds_from_cfg(void* usr, const char* cmd) {
+static void parse_occupancy_cmds_from_cfg(void *usr, const char *cmd) {
   struct OccupancyCommands *self = usr;
-  struct OccupancyTransitionCommand* cmd_cfg = &self->on_occupancy_cmds[self->on_occupancy_cmds_read];
+  struct OccupancyTransitionCommand *cmd_cfg =
+      &self->on_occupancy_cmds[self->on_occupancy_cmds_read];
   const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg);
   // On fail, don't increase counter. This will make the ambience mode validation init fail later
-  if (parse_ok) self->on_occupancy_cmds_read++;
+  if (parse_ok)
+    self->on_occupancy_cmds_read++;
 }
 
-static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, struct OccupancyCommands* self, bool respawn) {
-  for (size_t cmd_i=0; cmd_i < sz; ++cmd_i) {
+static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
+                            struct OccupancyCommands *self, bool respawn) {
+  for (size_t cmd_i = 0; cmd_i < sz; ++cmd_i) {
     if (cmds[cmd_i].pid != 0) {
       if (respawn) {
-          // We're respawning crashed processes, ignore if child already running
-          continue;
+        // We're respawning crashed processes, ignore if child already running
+        continue;
       } else {
-          printf("Error launching command %s: already launched with pid %d\n", cmds[cmd_i].bin, cmds[cmd_i].pid);
-          printf("Will ignore further commands");
-          return;
+        printf("Error launching command %s: already launched with pid %d\n", cmds[cmd_i].bin,
+               cmds[cmd_i].pid);
+        printf("Will ignore further commands");
+        return;
       }
     }
 
     if (respawn && cmds[cmd_i].restart_cmd_wait_time_seconds > 0) {
-        printf("TIMEOUT %zu %s...\n", cmds[cmd_i].restart_cmd_wait_time_seconds , cmds[cmd_i].bin);
-        cmds[cmd_i].restart_cmd_wait_time_seconds -= 1;
-        continue;
+      printf("TIMEOUT %zu %s...\n", cmds[cmd_i].restart_cmd_wait_time_seconds, cmds[cmd_i].bin);
+      cmds[cmd_i].restart_cmd_wait_time_seconds -= 1;
+      continue;
     }
 
     printf("Launching ambience app: %s ", cmds[cmd_i].bin);
@@ -129,7 +136,7 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, 
     }
     printf("\n");
 
-    printf("TO=%zu\n",  self->restart_cmd_wait_time_seconds); // XXX
+    printf("TO=%zu\n", self->restart_cmd_wait_time_seconds); // XXX
     cmds[cmd_i].should_restart = self->restart_cmd_on_unexpected_exit;
     cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
     cmds[cmd_i].pid = fork();
@@ -144,8 +151,8 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, 
   }
 }
 
-static void stop_commands(size_t sz, struct OccupancyTransitionCommand* cmds) {
-  for (size_t cmd_i=0; cmd_i < sz; ++cmd_i) {
+static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
+  for (size_t cmd_i = 0; cmd_i < sz; ++cmd_i) {
     cmds[cmd_i].should_restart = false;
 
     if (cmds[cmd_i].pid == 0) {
@@ -179,12 +186,13 @@ static void stop_commands(size_t sz, struct OccupancyTransitionCommand* cmds) {
   }
 }
 
-bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand* cmds, int pid, int wstatus) {
-  for (size_t i=0; i < sz; ++i) {
+bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand *cmds, int pid,
+                                  int wstatus) {
+  for (size_t i = 0; i < sz; ++i) {
     if (pid == cmds[i].pid) {
       printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
       if (cmds[i].should_restart) {
-          printf("TODO: RELAUNCH\n"); // XXX TODO
+        printf("TODO: RELAUNCH\n"); // XXX TODO
       }
       cmds[i].pid = 0;
       return true;
@@ -194,33 +202,36 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand* 
 }
 
 void sighandler_on_child_cmd_exit() {
-    while (true) {
-        int wstatus;
-        int exitedpid = waitpid(-1, &wstatus, WNOHANG);
-        if (exitedpid == 0) {
-            break;
-        } else if (exitedpid < 0 && errno == 10) {
-            // No more pids
-            break;
-        } else if (exitedpid < 0) {
-           perror("Error waitpid on signal handler");
-           break;
-        }
-
-        bool found = sighandler_search_exit_child(g_sigchld_handler->on_occupancy_cmds_cnt, g_sigchld_handler->on_occupancy_cmds, exitedpid, wstatus);
-        if (!found) {
-            sighandler_search_exit_child(g_sigchld_handler->on_vacancy_cmds_cnt, g_sigchld_handler->on_vacancy_cmds, exitedpid, wstatus);
-        }
-        if (!found) {
-            printf("Error: received SIGCHLD for unknown child with pid %i\n", exitedpid);
-        }
+  while (true) {
+    int wstatus;
+    int exitedpid = waitpid(-1, &wstatus, WNOHANG);
+    if (exitedpid == 0) {
+      break;
+    } else if (exitedpid < 0 && errno == 10) {
+      // No more pids
+      break;
+    } else if (exitedpid < 0) {
+      perror("Error waitpid on signal handler");
+      break;
     }
-}
 
+    bool found =
+        sighandler_search_exit_child(g_sigchld_handler->on_occupancy_cmds_cnt,
+                                     g_sigchld_handler->on_occupancy_cmds, exitedpid, wstatus);
+    if (!found) {
+      sighandler_search_exit_child(g_sigchld_handler->on_vacancy_cmds_cnt,
+                                   g_sigchld_handler->on_vacancy_cmds, exitedpid, wstatus);
+    }
+    if (!found) {
+      printf("Error: received SIGCHLD for unknown child with pid %i\n", exitedpid);
+    }
+  }
+}
 
 struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   if (g_sigchld_handler != NULL) {
-    fprintf(stderr, "Handler for occupancy command exit already set. Are you creating two OccupancyCommands object?\n");
+    fprintf(stderr, "Handler for occupancy command exit already set. Are you creating two "
+                    "OccupancyCommands object?\n");
     return NULL;
   }
 
@@ -236,13 +247,17 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
 
   self->on_occupancy_cmds_cnt = cfg->on_occupancy_cmds_cnt;
   self->on_occupancy_cmds_read = 0;
-  self->on_occupancy_cmds = malloc(self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
-  memset(self->on_occupancy_cmds, 0, self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
+  self->on_occupancy_cmds =
+      malloc(self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
+  memset(self->on_occupancy_cmds, 0,
+         self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
 
   self->on_vacancy_cmds_cnt = cfg->on_vacancy_cmds_cnt;
   self->on_vacancy_cmds_read = 0;
-  self->on_vacancy_cmds = malloc(self->on_vacancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
-  memset(self->on_vacancy_cmds, 0, self->on_vacancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
+  self->on_vacancy_cmds =
+      malloc(self->on_vacancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
+  memset(self->on_vacancy_cmds, 0,
+         self->on_vacancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
 
   if (!self->on_occupancy_cmds || !self->on_vacancy_cmds) {
     fprintf(stderr, "occupancy_commands_init on_vacancy_cmds bad alloc\n");
@@ -253,12 +268,14 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   cfg_each_cmd(cfg->on_vacancy_cmds, parse_vacancy_cmds_from_cfg, self);
 
   if (self->on_occupancy_cmds_read != self->on_occupancy_cmds_cnt) {
-    fprintf(stderr, "occupancy commands: read %zu commands, expected %zu\n", self->on_occupancy_cmds_read, self->on_occupancy_cmds_cnt);
+    fprintf(stderr, "occupancy commands: read %zu commands, expected %zu\n",
+            self->on_occupancy_cmds_read, self->on_occupancy_cmds_cnt);
     goto ERR;
   }
 
   if (self->on_vacancy_cmds_read != self->on_vacancy_cmds_cnt) {
-    fprintf(stderr, "Vacancy commands: read %zu commands, expected %zu\n", self->on_vacancy_cmds_read, self->on_vacancy_cmds_cnt);
+    fprintf(stderr, "Vacancy commands: read %zu commands, expected %zu\n",
+            self->on_vacancy_cmds_read, self->on_vacancy_cmds_cnt);
     goto ERR;
   }
 
@@ -266,11 +283,11 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   signal(SIGCHLD, sighandler_on_child_cmd_exit);
   return self;
 ERR:
-    occupancy_commands_free(self);
-    return NULL;
+  occupancy_commands_free(self);
+  return NULL;
 }
 
-void occupancy_commands_free(struct OccupancyCommands* self) {
+void occupancy_commands_free(struct OccupancyCommands *self) {
   if (!self) {
     return;
   }
@@ -281,51 +298,52 @@ void occupancy_commands_free(struct OccupancyCommands* self) {
   }
 
   if (self->on_occupancy_cmds) {
-      for (size_t i=0; i < self->on_occupancy_cmds_cnt; ++i) {
-          free(self->on_occupancy_cmds[i].cmd);
-          free(self->on_occupancy_cmds[i].args);
-      }
-      free(self->on_occupancy_cmds);
+    for (size_t i = 0; i < self->on_occupancy_cmds_cnt; ++i) {
+      free(self->on_occupancy_cmds[i].cmd);
+      free(self->on_occupancy_cmds[i].args);
+    }
+    free(self->on_occupancy_cmds);
   }
 
   if (self->on_vacancy_cmds) {
-      for (size_t i=0; i < self->on_vacancy_cmds_cnt; ++i) {
-          free(self->on_vacancy_cmds[i].cmd);
-          free(self->on_vacancy_cmds[i].args);
-      }
-      free(self->on_vacancy_cmds);
+    for (size_t i = 0; i < self->on_vacancy_cmds_cnt; ++i) {
+      free(self->on_vacancy_cmds[i].cmd);
+      free(self->on_vacancy_cmds[i].args);
+    }
+    free(self->on_vacancy_cmds);
   }
 
   free(self);
 }
 
-void occupancy_commands_on_occupancy(struct OccupancyCommands* self) {
-    if (self->current_state == STATE_OCCUPIED) {
-        printf("Occupancy commands error: tried to set state to OCCUPIED while already in OCCUPIED state\n");
-        return;
-    }
+void occupancy_commands_on_occupancy(struct OccupancyCommands *self) {
+  if (self->current_state == STATE_OCCUPIED) {
+    printf("Occupancy commands error: tried to set state to OCCUPIED while already in OCCUPIED "
+           "state\n");
+    return;
+  }
 
-    self->current_state = STATE_OCCUPIED;
-    stop_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds);
-    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, false);
+  self->current_state = STATE_OCCUPIED;
+  stop_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds);
+  launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, false);
 }
 
-void occupancy_commands_on_vacancy(struct OccupancyCommands* self) {
-    if (self->current_state == STATE_VACANT) {
-        printf("Occupancy commands error: tried to set state to VACANT while already in VACANT state\n");
-        return;
-    }
+void occupancy_commands_on_vacancy(struct OccupancyCommands *self) {
+  if (self->current_state == STATE_VACANT) {
+    printf(
+        "Occupancy commands error: tried to set state to VACANT while already in VACANT state\n");
+    return;
+  }
 
-    self->current_state = STATE_VACANT;
-    stop_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds);
-    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, false);
+  self->current_state = STATE_VACANT;
+  stop_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds);
+  launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, false);
 }
 
-void occupancy_commands_tick(struct OccupancyCommands* self) {
-    if (self->current_state == STATE_OCCUPIED) {
-      launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, true);
-    } else if (self->current_state == STATE_VACANT) {
-      launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, true);
-    }
+void occupancy_commands_tick(struct OccupancyCommands *self) {
+  if (self->current_state == STATE_OCCUPIED) {
+    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, true);
+  } else if (self->current_state == STATE_VACANT) {
+    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, true);
+  }
 }
-
