@@ -132,9 +132,9 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
       continue;
     }
 
-    printf("%s ambience app: %s ", respawn ? "Restarting" : "Launching", cmds[cmd_i].bin);
+    printf("%s ambience app:", respawn ? "Restarting" : "Launching");
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
-      printf(" %s", cmds[cmd_i].args[i++]);
+      printf(" %s", cmds[cmd_i].args[i]);
     }
     printf("\n");
 
@@ -162,9 +162,9 @@ static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
       continue;
     }
 
-    printf("Stopping ambience app: %s ", cmds[cmd_i].bin);
+    printf("Stopping ambience app:");
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
-      printf(" %s", cmds[cmd_i].args[i++]);
+      printf(" %s", cmds[cmd_i].args[i]);
     }
     printf("\n");
 

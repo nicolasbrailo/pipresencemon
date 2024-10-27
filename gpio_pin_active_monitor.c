@@ -24,7 +24,13 @@ struct GpioPinActiveMonitor {
 
   float rising_edge_active_threshold;
   float falling_edge_inactive_threshold;
+  // Current status, without inactivity timeout
   atomic_bool currently_active;
+  // Follows currently_active, but has a delay of $vacancy_motion_timeout_seconds before
+  // transitioning from active->inactive
+  size_t vacancy_motion_timeout_seconds;
+  size_t vacant_timeout;
+  atomic_bool active;
 };
 
 static void *gpio_active_monitor_update(void *usr) {
@@ -37,11 +43,27 @@ static void *gpio_active_monitor_update(void *usr) {
 
     if (mon->currently_active &&
         (gpio_active_monitor_active_pct(mon) < mon->falling_edge_inactive_threshold)) {
+      printf("GPIO reports inactive, waiting %zu before reporting vacancy\n", mon->vacant_timeout);
       mon->currently_active = false;
 
     } else if (!mon->currently_active &&
                (gpio_active_monitor_active_pct(mon) > mon->rising_edge_active_threshold)) {
+      printf("GPIO reports ocupancy\n");
       mon->currently_active = true;
+    }
+
+    if (mon->currently_active) {
+      mon->vacant_timeout = mon->vacancy_motion_timeout_seconds;
+      mon->active = true;
+    } else {
+      if (mon->vacant_timeout > 0) {
+        mon->vacant_timeout -= 1;
+      } else {
+        if (mon->active) {
+          printf("Reporting vacancy\n");
+          mon->active = false;
+        }
+      }
     }
 
     sleep(mon->poll_period_secs);
@@ -49,27 +71,15 @@ static void *gpio_active_monitor_update(void *usr) {
   return NULL;
 }
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init_from_cfg(const struct Config *cfg,
-                                                               bool start_active) {
-  struct GpioPinActiveMonitor_args args = {
-      .start_active = start_active,
-      .sensor_pin = cfg->sensor_pin,
-      .sensor_poll_period_secs = cfg->sensor_poll_period_secs,
-      .monitor_window_seconds = cfg->sensor_monitor_window_seconds,
-      .rising_edge_active_threshold_pct = cfg->rising_edge_occupancy_threshold_pct,
-      .falling_edge_inactive_threshold_pct = cfg->falling_edge_vacancy_threshold_pct,
-  };
+struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) {
+  const bool start_active = true;
 
-  return gpio_active_monitor_init(args);
-}
-
-struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct GpioPinActiveMonitor_args args) {
-  if (args.sensor_pin > GPIO_PINS) {
-    fprintf(stderr, "Invalid pin number %lu (max %lu)\n", args.sensor_pin, GPIO_PINS);
+  if (cfg->sensor_pin > GPIO_PINS) {
+    fprintf(stderr, "Invalid pin number %lu (max %lu)\n", cfg->sensor_pin, GPIO_PINS);
     return NULL;
   }
 
-  if (args.rising_edge_active_threshold_pct < args.falling_edge_inactive_threshold_pct) {
+  if (cfg->rising_edge_occupancy_threshold_pct < cfg->falling_edge_vacancy_threshold_pct) {
     fprintf(stderr,
             "A 'rising edge threshold' smaller than 'falling edge threshold' is not stable\n");
     return NULL;
@@ -87,24 +97,28 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct GpioPinActive
   }
 
   mon->gpio = gpio;
-  mon->sensor_pin = args.sensor_pin;
-
+  mon->sensor_pin = cfg->sensor_pin;
   mon->sensor_readings_write_idx = 0;
-  mon->sensor_readings_sz = args.monitor_window_seconds / args.sensor_poll_period_secs;
-  mon->active_count_in_window = args.start_active ? mon->sensor_readings_sz : 0;
-  mon->currently_active = args.start_active;
+  mon->sensor_readings_sz = cfg->sensor_monitor_window_seconds / cfg->sensor_poll_period_secs;
+  mon->active_count_in_window = start_active ? mon->sensor_readings_sz : 0;
+
+  mon->vacancy_motion_timeout_seconds = mon->vacancy_motion_timeout_seconds;
+  mon->vacant_timeout = mon->vacancy_motion_timeout_seconds;
+  mon->currently_active = start_active;
+  mon->active = start_active;
+
   mon->sensor_readings = malloc(sizeof(mon->sensor_readings[0]) * mon->sensor_readings_sz);
   if (!mon->sensor_readings) {
     perror("GpioPinActiveMonitor bad window alloc");
     free(mon);
     return NULL;
   }
-  memset(mon->sensor_readings, args.start_active, mon->sensor_readings_sz);
+  memset(mon->sensor_readings, start_active, mon->sensor_readings_sz);
 
-  mon->rising_edge_active_threshold = args.rising_edge_active_threshold_pct / 100.f;
-  mon->falling_edge_inactive_threshold = args.falling_edge_inactive_threshold_pct / 100.f;
+  mon->rising_edge_active_threshold = cfg->rising_edge_occupancy_threshold_pct / 100.f;
+  mon->falling_edge_inactive_threshold = cfg->falling_edge_vacancy_threshold_pct / 100.f;
 
-  mon->poll_period_secs = args.sensor_poll_period_secs;
+  mon->poll_period_secs = cfg->sensor_poll_period_secs;
   mon->thread_stop = false;
   if (pthread_create(&mon->thread_id, NULL, gpio_active_monitor_update, mon) != 0) {
     perror("GpioPinActiveMonitor thread create error");
@@ -136,5 +150,5 @@ float gpio_active_monitor_active_pct(struct GpioPinActiveMonitor *mon) {
 }
 
 bool gpio_active_monitor_pin_active(struct GpioPinActiveMonitor *mon) {
-  return mon->currently_active ? true : false;
+  return mon->active ? true : false;
 }

@@ -76,7 +76,15 @@ void gpio_close(struct GPIO *gpio) {
 
 bool gpio_get_pin(struct GPIO *gpio, size_t pin) {
   if (MOCK) {
-    return true;
+    FILE *file = fopen("gpio_mock", "r");
+    if (file == NULL) {
+      perror("ERROR: GPIO mocked, but file 'gpio_mock' can't be found. Do `echo 1 > gpio_mock` to "
+             "mock.");
+      return false;
+    }
+    char ch = fgetc(file);
+    fclose(file);
+    return (ch == '1');
   }
 
   return gpio->mem[GPIO_INPUTS] & (1 << pin);
