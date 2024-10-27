@@ -10,7 +10,7 @@ clean:
 
 XCOMPILE=-target arm-linux-gnueabihf \
 				 -mcpu=arm1176jzf-s \
-				 --sysroot ./mnt/ 
+	       --sysroot ~/src/xcomp-rpiz-env/mnt/ 
 CFLAGS=-ggdb \
 		   -Wall -Werror -Wextra \
        -Wundef \
@@ -27,7 +27,7 @@ CFLAGS=-ggdb \
 
 build/%.o: %.c %.h
 	mkdir -p build
-	@if [ ! -d mnt/lib/raspberrypi-sys-mods ]; then \
+	@if [ ! -d ~/src/xcomp-rpiz-env/mnt/lib/raspberrypi-sys-mods ]; then \
 		echo "xcompiler sysroot not detected, try `make xcompile-start`"; \
 		@exit 1; \
 	fi ;
@@ -55,10 +55,10 @@ system-deps:
 	sudo apt-get install clang-format
 
 xcompile-start:
-	./rpiz-xcompile/mount_rpy_root.sh
+	./rpiz-xcompile/mount_rpy_root.sh ~/src/xcomp-rpiz-env
 
 xcompile-end:
-	./rpiz-xcompile/umount_rpy_root.sh
+	./rpiz-xcompile/umount_rpy_root.sh ~/src/xcomp-rpiz-env
 
 deploytgt: pipresencemon pipresencemon.cfg
 	scp ./pipresencemon batman@10.0.0.146:/home/batman/pipresencemon/
