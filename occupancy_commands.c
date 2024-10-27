@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +20,10 @@ struct OccupancyTransitionCommand {
   char *bin;
   // Array of ptrs to args (eg "one two three")
   char **args;
-  pid_t pid;
+  // pid is atomic so the signal handler can reset it on crash
+  atomic_int pid;
   bool should_restart;
+  // Cooldown before restarting a crashed process
   size_t restart_cmd_wait_time_seconds;
 };
 
@@ -125,20 +128,16 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
     }
 
     if (respawn && cmds[cmd_i].restart_cmd_wait_time_seconds > 0) {
-      printf("TIMEOUT %zu %s...\n", cmds[cmd_i].restart_cmd_wait_time_seconds, cmds[cmd_i].bin);
       cmds[cmd_i].restart_cmd_wait_time_seconds -= 1;
       continue;
     }
 
-    printf("Launching ambience app: %s ", cmds[cmd_i].bin);
+    printf("%s ambience app: %s ", respawn ? "Restarting" : "Launching", cmds[cmd_i].bin);
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
       printf(" %s", cmds[cmd_i].args[i++]);
     }
     printf("\n");
 
-    printf("TO=%zu\n", self->restart_cmd_wait_time_seconds); // XXX
-    cmds[cmd_i].should_restart = self->restart_cmd_on_unexpected_exit;
-    cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
     cmds[cmd_i].pid = fork();
     if (cmds[cmd_i].pid == 0) {
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
@@ -147,6 +146,9 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
     } else if (cmds[cmd_i].pid < 0) {
       perror("Failed to launch ambience mode app");
       cmds[cmd_i].pid = 0;
+    } else {
+      cmds[cmd_i].should_restart = self->restart_cmd_on_unexpected_exit;
+      cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
     }
   }
 }
@@ -190,9 +192,11 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand *
                                   int wstatus) {
   for (size_t i = 0; i < sz; ++i) {
     if (pid == cmds[i].pid) {
-      printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
       if (cmds[i].should_restart) {
-        printf("TODO: RELAUNCH\n"); // XXX TODO
+        printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
+        printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+      } else {
+        printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
       }
       cmds[i].pid = 0;
       return true;
