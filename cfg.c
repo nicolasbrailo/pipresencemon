@@ -155,6 +155,7 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
     ok &= cfg_read_size_t(h, "rising_edge_occupancy_threshold_pct", &cfg->rising_edge_occupancy_threshold_pct);
     ok &= cfg_read_size_t(h, "falling_edge_vacancy_threshold_pct", &cfg->falling_edge_vacancy_threshold_pct);
     ok &= cfg_read_size_t(h, "vacancy_motion_timeout_seconds", &cfg->vacancy_motion_timeout_seconds);
+    ok &= cfg_read_size_t(h, "restart_cmd_wait_time_seconds", &cfg->restart_cmd_wait_time_seconds);
     ok &= cfg_read_bool(h, "restart_cmd_on_unexpected_exit", &cfg->restart_cmd_on_unexpected_exit);
 
     {
@@ -217,6 +218,8 @@ void cfg_debug(const struct Config* cfg) {
   printf("rising_edge_occupancy_threshold_pct=%zu\n", cfg->rising_edge_occupancy_threshold_pct);
   printf("falling_edge_vacancy_threshold_pct=%zu\n", cfg->falling_edge_vacancy_threshold_pct);
   printf("vacancy_motion_timeout_seconds=%zu\n", cfg->vacancy_motion_timeout_seconds);
+  printf("restart_cmd_on_unexpected_exit=%s\n", (cfg->restart_cmd_on_unexpected_exit ? "true" : "false"));
+  printf("restart_cmd_wait_time_seconds=%zu\n", cfg->restart_cmd_wait_time_seconds);
   cfg_each_cmd(cfg->on_occupancy_cmds, &dbg_on_occupancy_cmds, NULL);
   cfg_each_cmd(cfg->on_vacancy_cmds, &dbg_on_vacancy_cmds, NULL);
 }

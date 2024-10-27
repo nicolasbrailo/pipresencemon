@@ -24,6 +24,7 @@ struct Config {
 
     // Restart child cmds on crash
     bool restart_cmd_on_unexpected_exit;
+    size_t restart_cmd_wait_time_seconds;
 
     // Commands to be executed when transitioning from no-presence to presence
     size_t on_occupancy_cmds_cnt;

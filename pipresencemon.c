@@ -50,6 +50,8 @@ int main(int argc, const char** argv) {
       printf("No occupancy detected by GPIO sensor\n");
       occupancy_commands_on_vacancy(occupancy_cmds);
     }
+
+    occupancy_commands_tick(occupancy_cmds);
     sleep(1);
   }
 

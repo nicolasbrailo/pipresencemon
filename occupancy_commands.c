@@ -21,6 +21,7 @@ struct OccupancyTransitionCommand {
   char **args;
   pid_t pid;
   bool should_restart;
+  size_t restart_cmd_wait_time_seconds;
 };
 
 enum CurrentState {
@@ -31,7 +32,8 @@ enum CurrentState {
 
 struct OccupancyCommands {
     enum CurrentState current_state;
-    bool should_restart_on_crash;
+    bool restart_cmd_on_unexpected_exit;
+    size_t restart_cmd_wait_time_seconds;
 
     size_t on_occupancy_cmds_read;
     size_t on_occupancy_cmds_cnt;
@@ -102,12 +104,23 @@ static void parse_occupancy_cmds_from_cfg(void* usr, const char* cmd) {
   if (parse_ok) self->on_occupancy_cmds_read++;
 }
 
-static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, bool should_restart_on_crash) {
+static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, struct OccupancyCommands* self, bool respawn) {
   for (size_t cmd_i=0; cmd_i < sz; ++cmd_i) {
     if (cmds[cmd_i].pid != 0) {
-      printf("Error launching command %s: already launched with pid %d\n", cmds[cmd_i].bin, cmds[cmd_i].pid);
-      printf("Will ignore further commands");
-      return;
+      if (respawn) {
+          // We're respawning crashed processes, ignore if child already running
+          continue;
+      } else {
+          printf("Error launching command %s: already launched with pid %d\n", cmds[cmd_i].bin, cmds[cmd_i].pid);
+          printf("Will ignore further commands");
+          return;
+      }
+    }
+
+    if (respawn && cmds[cmd_i].restart_cmd_wait_time_seconds > 0) {
+        printf("TIMEOUT %zu %s...\n", cmds[cmd_i].restart_cmd_wait_time_seconds , cmds[cmd_i].bin);
+        cmds[cmd_i].restart_cmd_wait_time_seconds -= 1;
+        continue;
     }
 
     printf("Launching ambience app: %s ", cmds[cmd_i].bin);
@@ -116,7 +129,9 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand* cmds, 
     }
     printf("\n");
 
-    cmds[cmd_i].should_restart = should_restart_on_crash;
+    printf("TO=%zu\n",  self->restart_cmd_wait_time_seconds); // XXX
+    cmds[cmd_i].should_restart = self->restart_cmd_on_unexpected_exit;
+    cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
     cmds[cmd_i].pid = fork();
     if (cmds[cmd_i].pid == 0) {
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
@@ -216,7 +231,8 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   }
 
   self->current_state = STATE_INVALID;
-  self->should_restart_on_crash = cfg->restart_cmd_on_unexpected_exit;
+  self->restart_cmd_on_unexpected_exit = cfg->restart_cmd_on_unexpected_exit;
+  self->restart_cmd_wait_time_seconds = cfg->restart_cmd_wait_time_seconds;
 
   self->on_occupancy_cmds_cnt = cfg->on_occupancy_cmds_cnt;
   self->on_occupancy_cmds_read = 0;
@@ -291,7 +307,7 @@ void occupancy_commands_on_occupancy(struct OccupancyCommands* self) {
 
     self->current_state = STATE_OCCUPIED;
     stop_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds);
-    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self->should_restart_on_crash);
+    launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, false);
 }
 
 void occupancy_commands_on_vacancy(struct OccupancyCommands* self) {
@@ -302,6 +318,14 @@ void occupancy_commands_on_vacancy(struct OccupancyCommands* self) {
 
     self->current_state = STATE_VACANT;
     stop_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds);
-    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self->should_restart_on_crash);
+    launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, false);
+}
+
+void occupancy_commands_tick(struct OccupancyCommands* self) {
+    if (self->current_state == STATE_OCCUPIED) {
+      launch_commands(self->on_occupancy_cmds_cnt, self->on_occupancy_cmds, self, true);
+    } else if (self->current_state == STATE_VACANT) {
+      launch_commands(self->on_vacancy_cmds_cnt, self->on_vacancy_cmds, self, true);
+    }
 }
 
