@@ -9,7 +9,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define MOCK false
+#define MOCK true
+
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13

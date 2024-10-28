@@ -160,6 +160,8 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
   ok &= cfg_read_size_t(h, "vacancy_motion_timeout_seconds", &cfg->vacancy_motion_timeout_seconds);
   ok &= cfg_read_size_t(h, "restart_cmd_wait_time_seconds", &cfg->restart_cmd_wait_time_seconds);
   ok &= cfg_read_bool(h, "restart_cmd_on_unexpected_exit", &cfg->restart_cmd_on_unexpected_exit);
+  ok &= cfg_read_size_t(h, "crash_on_repeated_cmd_failure_count",
+                        &cfg->crash_on_repeated_cmd_failure_count);
 
   {
     int read_cnt = cfg_read_str_arr(h, "on_occupancy_cmd", cfg->on_occupancy_cmds,
@@ -168,6 +170,21 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
       ok = false;
     } else {
       cfg->on_occupancy_cmds_cnt = (unsigned)read_cnt;
+      for (size_t i = 0; i < cfg->on_occupancy_cmds_cnt; ++i) {
+        char key_name[50];
+        int ret = snprintf(key_name, sizeof(key_name), "on_crash_restart_occupancy_cmd%zu", i);
+        if (ret < 0) {
+          perror("Error reading config key, snprintf fail\n");
+          ok = false;
+          break;
+        }
+        bool should_restart = false;
+        if (!cfg_read_bool(h, key_name, &should_restart)) {
+          // if reading fail, use default
+          should_restart = cfg->restart_cmd_on_unexpected_exit;
+          printf("%d\n", should_restart); // XXX
+        }
+      }
     }
   }
 
@@ -209,8 +226,12 @@ void cfg_each_cmd(const char *cmds, cfg_each_cmd_cb_t cb, void *usr) {
   }
 }
 
-static void dbg_on_occupancy_cmds(void * _unused __attribute__((unused)), const char *cmd) { printf("on_occupancy_cmd=%s\n", cmd); }
-static void dbg_on_vacancy_cmds(void * _unused __attribute__((unused)), const char *cmd) { printf("on_vacancy_cmd=%s\n", cmd); }
+static void dbg_on_occupancy_cmds(void *_unused __attribute__((unused)), const char *cmd) {
+  printf("on_occupancy_cmd=%s\n", cmd);
+}
+static void dbg_on_vacancy_cmds(void *_unused __attribute__((unused)), const char *cmd) {
+  printf("on_vacancy_cmd=%s\n", cmd);
+}
 
 void cfg_debug(const struct Config *cfg) {
   printf("Config debug\n");
@@ -223,6 +244,7 @@ void cfg_debug(const struct Config *cfg) {
   printf("restart_cmd_on_unexpected_exit=%s\n",
          (cfg->restart_cmd_on_unexpected_exit ? "true" : "false"));
   printf("restart_cmd_wait_time_seconds=%zu\n", cfg->restart_cmd_wait_time_seconds);
+  printf("crash_on_repeated_cmd_failure_count=%zu\n", cfg->crash_on_repeated_cmd_failure_count);
   cfg_each_cmd(cfg->on_occupancy_cmds, &dbg_on_occupancy_cmds, NULL);
   cfg_each_cmd(cfg->on_vacancy_cmds, &dbg_on_vacancy_cmds, NULL);
 }

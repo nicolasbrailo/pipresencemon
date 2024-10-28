@@ -25,6 +25,7 @@ struct OccupancyTransitionCommand {
   bool should_restart;
   // Cooldown before restarting a crashed process
   size_t restart_cmd_wait_time_seconds;
+  size_t restart_count;
 };
 
 enum CurrentState {
@@ -37,6 +38,7 @@ struct OccupancyCommands {
   enum CurrentState current_state;
   bool restart_cmd_on_unexpected_exit;
   size_t restart_cmd_wait_time_seconds;
+  size_t crash_on_repeated_cmd_failure_count;
 
   size_t on_occupancy_cmds_read;
   size_t on_occupancy_cmds_cnt;
@@ -132,11 +134,24 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
       continue;
     }
 
-    printf("%s ambience app:", respawn ? "Restarting" : "Launching");
+    if (respawn) {
+      cmds[cmd_i].restart_count++;
+      printf("Restarting (attempt #%zu) ambience app:", cmds[cmd_i].restart_count);
+    } else {
+      printf("Launching ambience app:");
+    }
+
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
       printf(" %s", cmds[cmd_i].args[i]);
     }
     printf("\n");
+
+    if (respawn && self->crash_on_repeated_cmd_failure_count > 0 &&
+        cmds[cmd_i].restart_count > self->crash_on_repeated_cmd_failure_count) {
+      printf("Restart attempts (%zu) over retry limit, something is broken and will crash now\n",
+             cmds[cmd_i].restart_count);
+      abort();
+    }
 
     cmds[cmd_i].pid = fork();
     if (cmds[cmd_i].pid == 0) {
@@ -248,6 +263,7 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   self->current_state = STATE_INVALID;
   self->restart_cmd_on_unexpected_exit = cfg->restart_cmd_on_unexpected_exit;
   self->restart_cmd_wait_time_seconds = cfg->restart_cmd_wait_time_seconds;
+  self->crash_on_repeated_cmd_failure_count = cfg->crash_on_repeated_cmd_failure_count;
 
   self->on_occupancy_cmds_cnt = cfg->on_occupancy_cmds_cnt;
   self->on_occupancy_cmds_read = 0;
