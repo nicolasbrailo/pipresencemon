@@ -146,6 +146,32 @@ static int cfg_read_str_arr(void *h, const char key_root[], char *buff, size_t b
   return cnt;
 }
 
+static bool parse_should_restart_on_crash(void *h, size_t sz, const char *key_root,
+                                          const bool default_opt, size_t should_restart_arr_sz,
+                                          bool *should_restart_arr) {
+  if (sz > should_restart_arr_sz) {
+    printf(
+        "Error: there are more occupancy transition commands than can be allocated in the "
+        "should_restart vector. Please increase the size of this vector, or use less commands.\n");
+    abort();
+  }
+
+  for (size_t i = 0; i < sz; ++i) {
+    char key_name[50];
+    int ret = snprintf(key_name, sizeof(key_name), "%s%zu", key_root, i);
+    if (ret < 0) {
+      perror("parse_should_restart_on_crash: Error reading config key, snprintf fail\n");
+      return false;
+    }
+    if (!cfg_read_bool(h, key_name, &should_restart_arr[i])) {
+      // if reading fail, use default
+      should_restart_arr[i] = default_opt;
+    }
+  }
+
+  return true;
+}
+
 bool cfg_read(const char *fpath, struct Config *cfg) {
   void *h = cfg_init(fpath);
   bool ok = true;
@@ -170,21 +196,10 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
       ok = false;
     } else {
       cfg->on_occupancy_cmds_cnt = (unsigned)read_cnt;
-      for (size_t i = 0; i < cfg->on_occupancy_cmds_cnt; ++i) {
-        char key_name[50];
-        int ret = snprintf(key_name, sizeof(key_name), "on_crash_restart_occupancy_cmd%zu", i);
-        if (ret < 0) {
-          perror("Error reading config key, snprintf fail\n");
-          ok = false;
-          break;
-        }
-        bool should_restart = false;
-        if (!cfg_read_bool(h, key_name, &should_restart)) {
-          // if reading fail, use default
-          should_restart = cfg->restart_cmd_on_unexpected_exit;
-          printf("%d\n", should_restart); // XXX
-        }
-      }
+      parse_should_restart_on_crash(h, cfg->on_occupancy_cmds_cnt, "on_crash_restart_occupancy_cmd",
+                                    cfg->restart_cmd_on_unexpected_exit,
+                                    sizeof(cfg->occupancy_cmd_should_restart_on_crash),
+                                    cfg->occupancy_cmd_should_restart_on_crash);
     }
   }
 
@@ -196,6 +211,10 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
       // ok = false;
     } else {
       cfg->on_vacancy_cmds_cnt = (unsigned)read_cnt;
+      parse_should_restart_on_crash(h, cfg->on_vacancy_cmds_cnt, "on_crash_restart_occupancy_cmd",
+                                    cfg->restart_cmd_on_unexpected_exit,
+                                    sizeof(cfg->vacancy_cmd_should_restart_on_crash),
+                                    cfg->vacancy_cmd_should_restart_on_crash);
     }
   }
 
@@ -214,6 +233,7 @@ void cfg_each_cmd(const char *cmds, cfg_each_cmd_cb_t cb, void *usr) {
     return;
   }
 
+  size_t cmd_idx = 0;
   while (cmd_f < MAX_SZ) {
     while (cmds[cmd_f++] != '\0' && cmd_f < MAX_SZ)
       ;
@@ -221,19 +241,23 @@ void cfg_each_cmd(const char *cmds, cfg_each_cmd_cb_t cb, void *usr) {
       // Empty string, only \0 found
       return;
     }
-    cb(usr, &cmds[cmd_i]);
+    cb(usr, cmd_idx++, &cmds[cmd_i]);
     cmd_i = cmd_f;
   }
 }
 
-static void dbg_on_occupancy_cmds(void *_unused __attribute__((unused)), const char *cmd) {
-  printf("on_occupancy_cmd=%s\n", cmd);
+static void dbg_on_occupancy_cmds(void *usr, size_t i, const char *cmd) {
+  const struct Config *cfg = usr;
+  printf("on_occupancy_cmd[%zu]=%s (%s restart on crash)\n", i, cmd,
+         cfg->occupancy_cmd_should_restart_on_crash[i] ? "will" : "won't");
 }
-static void dbg_on_vacancy_cmds(void *_unused __attribute__((unused)), const char *cmd) {
-  printf("on_vacancy_cmd=%s\n", cmd);
+static void dbg_on_vacancy_cmds(void *usr, size_t i, const char *cmd) {
+  const struct Config *cfg = usr;
+  printf("on_vacancy_cmd[%zu]=%s (%s restart on crash)\n", i, cmd,
+         cfg->occupancy_cmd_should_restart_on_crash[i] ? "will" : "won't");
 }
 
-void cfg_debug(const struct Config *cfg) {
+void cfg_debug(struct Config *cfg) {
   printf("Config debug\n");
   printf("sensor_pin=%zu\n", cfg->sensor_pin);
   printf("sensor_poll_period_secs=%zu\n", cfg->sensor_poll_period_secs);
@@ -245,6 +269,6 @@ void cfg_debug(const struct Config *cfg) {
          (cfg->restart_cmd_on_unexpected_exit ? "true" : "false"));
   printf("restart_cmd_wait_time_seconds=%zu\n", cfg->restart_cmd_wait_time_seconds);
   printf("crash_on_repeated_cmd_failure_count=%zu\n", cfg->crash_on_repeated_cmd_failure_count);
-  cfg_each_cmd(cfg->on_occupancy_cmds, &dbg_on_occupancy_cmds, NULL);
-  cfg_each_cmd(cfg->on_vacancy_cmds, &dbg_on_vacancy_cmds, NULL);
+  cfg_each_cmd(cfg->on_occupancy_cmds, &dbg_on_occupancy_cmds, cfg);
+  cfg_each_cmd(cfg->on_vacancy_cmds, &dbg_on_vacancy_cmds, cfg);
 }

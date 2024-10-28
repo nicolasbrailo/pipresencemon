@@ -22,7 +22,8 @@ struct OccupancyTransitionCommand {
   char **args;
   // pid is atomic so the signal handler can reset it on crash
   atomic_int pid;
-  bool should_restart;
+  bool should_restart_on_crash;
+  bool should_run_now;
   // Cooldown before restarting a crashed process
   size_t restart_cmd_wait_time_seconds;
   size_t restart_count;
@@ -47,6 +48,9 @@ struct OccupancyCommands {
   size_t on_vacancy_cmds_read;
   size_t on_vacancy_cmds_cnt;
   struct OccupancyTransitionCommand *on_vacancy_cmds;
+
+  // A ptr to the config is held for callbacks, only while init runs
+  const struct Config *cfg;
 };
 
 // Non null if the SIGCHLD handler has been set
@@ -62,9 +66,11 @@ static size_t count_argc(const char *cmd) {
 }
 
 static bool parse_transition_cmd_from_cfg(const char *cmd,
-                                          struct OccupancyTransitionCommand *cmd_cfg) {
+                                          struct OccupancyTransitionCommand *cmd_cfg,
+                                          bool should_restart_on_crash) {
   cmd_cfg->pid = 0;
-  cmd_cfg->should_restart = false;
+  cmd_cfg->should_restart_on_crash = should_restart_on_crash;
+  cmd_cfg->should_run_now = false;
   cmd_cfg->cmd = malloc((1 + strlen(cmd)) * sizeof(char));
   if (!cmd_cfg->cmd)
     goto ALLOC_ERR;
@@ -95,20 +101,22 @@ ALLOC_ERR:
   return false;
 }
 
-static void parse_vacancy_cmds_from_cfg(void *usr, const char *cmd) {
+static void parse_vacancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
   struct OccupancyCommands *self = usr;
+  const bool should_restart_on_crash = self->cfg->vacancy_cmd_should_restart_on_crash[cmd_idx];
   struct OccupancyTransitionCommand *cmd_cfg = &self->on_vacancy_cmds[self->on_vacancy_cmds_read];
-  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg);
+  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg, should_restart_on_crash);
   // On fail, don't increase counter. This will make the ambience mode validation init fail later
   if (parse_ok)
     self->on_vacancy_cmds_read++;
 }
 
-static void parse_occupancy_cmds_from_cfg(void *usr, const char *cmd) {
+static void parse_occupancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
   struct OccupancyCommands *self = usr;
+  const bool should_restart_on_crash = self->cfg->occupancy_cmd_should_restart_on_crash[cmd_idx];
   struct OccupancyTransitionCommand *cmd_cfg =
       &self->on_occupancy_cmds[self->on_occupancy_cmds_read];
-  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg);
+  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg, should_restart_on_crash);
   // On fail, don't increase counter. This will make the ambience mode validation init fail later
   if (parse_ok)
     self->on_occupancy_cmds_read++;
@@ -127,6 +135,11 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
         printf("Will ignore further commands");
         return;
       }
+    }
+
+    if (respawn && !cmds[cmd_i].should_restart_on_crash) {
+      // Command exited or crashed, but doesn't want to be restarted
+      continue;
     }
 
     if (respawn && cmds[cmd_i].restart_cmd_wait_time_seconds > 0) {
@@ -154,6 +167,7 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
     }
 
     cmds[cmd_i].pid = fork();
+    cmds[cmd_i].should_run_now = true;
     if (cmds[cmd_i].pid == 0) {
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
       perror("Ambience mode app failed to execve");
@@ -162,7 +176,6 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
       perror("Failed to launch ambience mode app");
       cmds[cmd_i].pid = 0;
     } else {
-      cmds[cmd_i].should_restart = self->restart_cmd_on_unexpected_exit;
       cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
     }
   }
@@ -170,7 +183,7 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
 
 static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
   for (size_t cmd_i = 0; cmd_i < sz; ++cmd_i) {
-    cmds[cmd_i].should_restart = false;
+    cmds[cmd_i].should_run_now = false;
 
     if (cmds[cmd_i].pid == 0) {
       printf("Warning: try stopping command %s, but is not running\n", cmds[cmd_i].bin);
@@ -207,9 +220,13 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand *
                                   int wstatus) {
   for (size_t i = 0; i < sz; ++i) {
     if (pid == cmds[i].pid) {
-      if (cmds[i].should_restart) {
+      if (cmds[i].should_run_now) {
         printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
-        printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+        if (cmds[i].should_restart_on_crash) {
+          printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+        } else {
+          printf("This app WON'T restart.\n");
+        }
       } else {
         printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
       }
@@ -261,6 +278,7 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
   }
 
   self->current_state = STATE_INVALID;
+  self->cfg = cfg;
   self->restart_cmd_on_unexpected_exit = cfg->restart_cmd_on_unexpected_exit;
   self->restart_cmd_wait_time_seconds = cfg->restart_cmd_wait_time_seconds;
   self->crash_on_repeated_cmd_failure_count = cfg->crash_on_repeated_cmd_failure_count;
@@ -299,8 +317,13 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
     goto ERR;
   }
 
+  // Nothing else in here should access the config struct
+  self->cfg = NULL;
+
+  // Set up sighandler
   g_sigchld_handler = self;
   signal(SIGCHLD, sighandler_on_child_cmd_exit);
+
   return self;
 ERR:
   occupancy_commands_free(self);

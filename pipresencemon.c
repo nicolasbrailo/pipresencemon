@@ -41,10 +41,10 @@ int main(int argc, const char **argv) {
   signal(SIGINT, sighandler);
   bool currently_occupied = gpio_active_monitor_pin_active(gpio_mon);
   if (currently_occupied) {
-    printf("Startup assumes occupancy");
+    printf("Startup assumes occupancy\n");
     occupancy_commands_on_occupancy(occupancy_cmds);
   } else if (currently_occupied) {
-    printf("Startup assumes vacancy");
+    printf("Startup assumes vacancy\n");
     occupancy_commands_on_vacancy(occupancy_cmds);
   }
 
