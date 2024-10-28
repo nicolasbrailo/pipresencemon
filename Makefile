@@ -8,8 +8,7 @@ clean:
 	rm -f ./pipresencemon
 	rm -f ./example_svc
 
-XCOMPILE=""
-YCOMPILE=-target arm-linux-gnueabihf \
+XCOMPILE=-target arm-linux-gnueabihf \
 				 -mcpu=arm1176jzf-s \
 	       --sysroot ~/src/xcomp-rpiz-env/mnt/ 
 CFLAGS=-ggdb \
