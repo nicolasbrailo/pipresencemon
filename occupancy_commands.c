@@ -114,7 +114,6 @@ static void parse_vacancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *c
 }
 
 static void parse_occupancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
-printf("RECV %s\n", cmd);
   struct OccupancyCommands *self = usr;
   const bool should_restart_on_crash = self->cfg->occupancy_cmd_should_restart_on_crash[cmd_idx];
   struct OccupancyTransitionCommand *cmd_cfg =
@@ -173,6 +172,9 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
     cmds[cmd_i].pid = fork();
     cmds[cmd_i].should_run_now = true;
     if (cmds[cmd_i].pid == 0) {
+      // Wayfire crashes if the monitor switches on or off too quickly, so we give it a bit of time
+      printf("Sleep 1 before execv\n");
+      sleep(1);
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
       perror("Ambience mode app failed to execve");
       abort();
@@ -187,12 +189,16 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
 
 static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
   for (size_t cmd_i = 0; cmd_i < sz; ++cmd_i) {
-    cmds[cmd_i].should_run_now = false;
+    if (!cmds[cmd_i].should_run_now && cmds[cmd_i].pid == 0) {
+      continue;
+    }
 
-    if (cmds[cmd_i].pid == 0) {
+    if (cmds[cmd_i].should_run_now && cmds[cmd_i].pid == 0) {
       printf("Warning: try stopping command %s, but is not running\n", cmds[cmd_i].bin);
       continue;
     }
+
+    cmds[cmd_i].should_run_now = false;
 
     printf("Stopping ambience app:");
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
@@ -225,11 +231,16 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand *
   for (size_t i = 0; i < sz; ++i) {
     if (pid == cmds[i].pid) {
       if (cmds[i].should_run_now) {
-        printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
-        if (cmds[i].should_restart_on_crash) {
-          printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+        if (wstatus == 0) {
+            printf("Command %s with pid %i exit normally\n", cmds[i].bin, pid);
+            cmds[i].should_run_now = false;
         } else {
-          printf("This app WON'T restart.\n");
+            printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
+            if (cmds[i].should_restart_on_crash) {
+              printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+            } else {
+              printf("This app WON'T restart.\n");
+            }
         }
       } else {
         printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
