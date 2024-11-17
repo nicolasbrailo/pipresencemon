@@ -23,8 +23,8 @@ struct GpioPinActiveMonitor {
   atomic_bool thread_stop;
   size_t poll_period_secs;
 
-  float rising_edge_active_threshold;
-  float falling_edge_inactive_threshold;
+  size_t rising_edge_active_threshold_pct;
+  size_t falling_edge_inactive_threshold_pct;
   // Current status, without inactivity timeout
   atomic_bool currently_active;
   // Follows currently_active, but has a delay of $vacancy_motion_timeout_seconds before
@@ -37,22 +37,28 @@ struct GpioPinActiveMonitor {
 static void *gpio_active_monitor_update(void *usr) {
   struct GpioPinActiveMonitor *mon = usr;
   while (!mon->thread_stop) {
-    if (mon->gpio_debug) {
-        // TODO printf("HOLA\n");
-    }
+    bool pin_state = gpio_get_pin(mon->gpio, mon->sensor_pin);
     mon->active_count_in_window -= mon->sensor_readings[mon->sensor_readings_write_idx];
-    mon->sensor_readings[mon->sensor_readings_write_idx] = gpio_get_pin(mon->gpio, mon->sensor_pin);
+    mon->sensor_readings[mon->sensor_readings_write_idx] = pin_state;
     mon->active_count_in_window += mon->sensor_readings[mon->sensor_readings_write_idx];
     mon->sensor_readings_write_idx = (mon->sensor_readings_write_idx + 1) % mon->sensor_readings_sz;
 
+    if (mon->gpio_debug) {
+      printf("Pin reports %s, active_pct=%zu\n", pin_state ? "active" : "inactive",
+             gpio_active_monitor_active_pct(mon));
+    }
+
     if (mon->currently_active &&
-        (gpio_active_monitor_active_pct(mon) < mon->falling_edge_inactive_threshold)) {
-      printf("GPIO reports inactive, waiting %zu before reporting vacancy\n", mon->vacant_timeout);
+        (gpio_active_monitor_active_pct(mon) < mon->falling_edge_inactive_threshold_pct)) {
+      printf("GPIO reports vacancy: %zu%% activity (smaller than threshold for vacancy = %zu%%)\n",
+             gpio_active_monitor_active_pct(mon), mon->falling_edge_inactive_threshold_pct);
+      printf("Waiting %zu before reporting vacancy\n", mon->vacant_timeout);
       mon->currently_active = false;
 
     } else if (!mon->currently_active &&
-               (gpio_active_monitor_active_pct(mon) > mon->rising_edge_active_threshold)) {
-      printf("GPIO reports ocupancy\n");
+               (gpio_active_monitor_active_pct(mon) > mon->rising_edge_active_threshold_pct)) {
+      printf("GPIO reports ocupancy: %zu%% activity (bigger than threshold for ocupancy = %zu%%)\n",
+             gpio_active_monitor_active_pct(mon), mon->rising_edge_active_threshold_pct);
       mon->currently_active = true;
     }
 
@@ -120,8 +126,8 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) 
   }
   memset(mon->sensor_readings, start_active, mon->sensor_readings_sz);
 
-  mon->rising_edge_active_threshold = cfg->rising_edge_occupancy_threshold_pct / 100.f;
-  mon->falling_edge_inactive_threshold = cfg->falling_edge_vacancy_threshold_pct / 100.f;
+  mon->rising_edge_active_threshold_pct = cfg->rising_edge_occupancy_threshold_pct;
+  mon->falling_edge_inactive_threshold_pct = cfg->falling_edge_vacancy_threshold_pct;
 
   mon->poll_period_secs = cfg->sensor_poll_period_secs;
   mon->thread_stop = false;
@@ -150,8 +156,8 @@ void gpio_active_monitor_free(struct GpioPinActiveMonitor *mon) {
   free(mon);
 }
 
-float gpio_active_monitor_active_pct(struct GpioPinActiveMonitor *mon) {
-  return 1.f * mon->active_count_in_window / mon->sensor_readings_sz;
+size_t gpio_active_monitor_active_pct(struct GpioPinActiveMonitor *mon) {
+  return 100 * mon->active_count_in_window / mon->sensor_readings_sz;
 }
 
 bool gpio_active_monitor_pin_active(struct GpioPinActiveMonitor *mon) {

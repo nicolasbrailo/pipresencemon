@@ -195,7 +195,9 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
     int read_cnt = cfg_read_str_arr(h, "on_occupancy_cmd", cfg->on_occupancy_cmds,
                                     sizeof(cfg->on_occupancy_cmds));
     if (read_cnt <= 0) {
-      ok = false;
+      // Ignore if user wants no occupancy commands
+      // ok = false;
+      cfg->on_occupancy_cmds_cnt = 0;
     } else {
       cfg->on_occupancy_cmds_cnt = (unsigned)read_cnt;
       parse_should_restart_on_crash(h, cfg->on_occupancy_cmds_cnt, "on_crash_restart_occupancy_cmd",
@@ -211,6 +213,7 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
     if (read_cnt <= 0) {
       // Ignore if user wants no vacancy commands
       // ok = false;
+      cfg->on_vacancy_cmds_cnt = 0;
     } else {
       cfg->on_vacancy_cmds_cnt = (unsigned)read_cnt;
       parse_should_restart_on_crash(h, cfg->on_vacancy_cmds_cnt, "on_crash_restart_occupancy_cmd",
