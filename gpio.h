@@ -9,7 +9,7 @@
 struct GPIO;
 typedef unsigned int gpio_reg_t;
 
-struct GPIO *gpio_open();
+struct GPIO *gpio_open(bool use_mock);
 void gpio_close(struct GPIO *gpio);
 gpio_reg_t gpio_get_inputs(struct GPIO *gpio);
 gpio_reg_t gpio_get_and_print_delta(struct GPIO *gpio, gpio_reg_t prev_gpio_reg);

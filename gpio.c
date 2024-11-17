@@ -9,17 +9,17 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define MOCK false
 #define GPIO_PATH "/dev/gpiomem"
 #define GPIO_MEM_SZ 4096
 #define GPIO_INPUTS 13
 
 struct GPIO {
+  bool use_mock;
   int fd;
   gpio_reg_t *mem;
 };
 
-struct GPIO *gpio_open() {
+struct GPIO *gpio_open(bool use_mock) {
   const char *gpio_path = GPIO_PATH;
   struct GPIO *gpio = malloc(sizeof(struct GPIO));
   if (!gpio) {
@@ -27,7 +27,8 @@ struct GPIO *gpio_open() {
     return NULL;
   }
 
-  if (MOCK) {
+  gpio->use_mock = use_mock;
+  if (gpio->use_mock) {
     return gpio;
   }
 
@@ -54,7 +55,7 @@ struct GPIO *gpio_open() {
 }
 
 void gpio_close(struct GPIO *gpio) {
-  if (MOCK) {
+  if (gpio->use_mock) {
     free(gpio);
     return;
   }
@@ -75,7 +76,7 @@ void gpio_close(struct GPIO *gpio) {
 }
 
 bool gpio_get_pin(struct GPIO *gpio, size_t pin) {
-  if (MOCK) {
+  if (gpio->use_mock) {
     FILE *file = fopen("gpio_mock", "r");
     if (file == NULL) {
       perror("ERROR: GPIO mocked, but file 'gpio_mock' can't be found. Do `echo 1 > gpio_mock` to "
@@ -91,7 +92,7 @@ bool gpio_get_pin(struct GPIO *gpio, size_t pin) {
 }
 
 gpio_reg_t gpio_get_inputs(struct GPIO *gpio) {
-  if (MOCK) {
+  if (gpio->use_mock) {
     return -1;
   }
 

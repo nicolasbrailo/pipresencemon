@@ -4,6 +4,9 @@
 #include <stddef.h>
 
 struct Config {
+  bool gpio_debug;
+  bool gpio_use_mock;
+
   // Pin to monitor
   size_t sensor_pin;
 

@@ -10,23 +10,27 @@ clean:
 	rm -f ./pipresencemon
 	rm -f ./example_svc
 
+XCOMPILE=\
+  -target arm-linux-gnueabihf \
+  -mcpu=arm1176jzf-s \
+  --sysroot ~/src/xcomp-rpiz-env/mnt/ 
 XCOMPILE=--sysroot /
-XCOMPILE=-target arm-linux-gnueabihf \
-				 -mcpu=arm1176jzf-s \
-	       --sysroot ~/src/xcomp-rpiz-env/mnt/ 
-CFLAGS=-ggdb \
-		   -Wall -Werror -Wextra \
-       -Wundef \
-       -Wmissing-include-dirs \
-       -Wpointer-arith \
-       -Winit-self \
-       -Wfloat-equal \
-       -Wredundant-decls \
-       -Wimplicit-fallthrough \
-       -Wendif-labels \
-       -Wstrict-aliasing=2 \
-       -Woverflow \
-       -Wformat=2
+
+CFLAGS=\
+  $(XCOMPILE)\
+  -ggdb \
+  -Wall -Werror -Wextra \
+  -Wundef \
+  -Wmissing-include-dirs \
+  -Wpointer-arith \
+  -Winit-self \
+  -Wfloat-equal \
+  -Wredundant-decls \
+  -Wimplicit-fallthrough \
+  -Wendif-labels \
+  -Wstrict-aliasing=2 \
+  -Woverflow \
+  -Wformat=2
 
 build/%.o: %.c %.h
 	mkdir -p build
@@ -34,14 +38,14 @@ build/%.o: %.c %.h
 		echo "xcompiler sysroot not detected, try `make xcompile-start`"; \
 		@exit 1; \
 	fi ;
-	clang $(XCOMPILE) $(CFLAGS) $< -c -o $@
+	clang $(CFLAGS) $< -c -o $@
 
 pipresencemon: build/gpio.o \
 			build/gpio_pin_active_monitor.o \
 			build/cfg.o \
 			build/occupancy_commands.o \
 			pipresencemon.c
-	clang $(XCOMPILE) $(CFLAGS) $^ -o $@
+	clang $(CFLAGS) $^ -o $@
 
 example_svc: example_svc.c
 	$(CC) $(CFLAGS) $^ -o $@

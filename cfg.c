@@ -176,6 +176,8 @@ bool cfg_read(const char *fpath, struct Config *cfg) {
   void *h = cfg_init(fpath);
   bool ok = true;
 
+  ok &= cfg_read_bool(h, "gpio_debug", &cfg->gpio_debug);
+  ok &= cfg_read_bool(h, "gpio_use_mock", &cfg->gpio_use_mock);
   ok &= cfg_read_size_t(h, "sensor_pin", &cfg->sensor_pin);
   ok &= cfg_read_size_t(h, "sensor_poll_period_secs", &cfg->sensor_poll_period_secs);
   ok &= cfg_read_size_t(h, "sensor_monitor_window_seconds", &cfg->sensor_monitor_window_seconds);

@@ -11,6 +11,7 @@
 
 struct GpioPinActiveMonitor {
   struct GPIO *gpio;
+  bool gpio_debug;
   size_t sensor_pin;
 
   size_t sensor_readings_write_idx;
@@ -36,6 +37,9 @@ struct GpioPinActiveMonitor {
 static void *gpio_active_monitor_update(void *usr) {
   struct GpioPinActiveMonitor *mon = usr;
   while (!mon->thread_stop) {
+    if (mon->gpio_debug) {
+        // TODO printf("HOLA\n");
+    }
     mon->active_count_in_window -= mon->sensor_readings[mon->sensor_readings_write_idx];
     mon->sensor_readings[mon->sensor_readings_write_idx] = gpio_get_pin(mon->gpio, mon->sensor_pin);
     mon->active_count_in_window += mon->sensor_readings[mon->sensor_readings_write_idx];
@@ -85,7 +89,7 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) 
     return NULL;
   }
 
-  struct GPIO *gpio = gpio_open();
+  struct GPIO *gpio = gpio_open(cfg->gpio_use_mock);
   if (!gpio) {
     return NULL;
   }
@@ -97,6 +101,7 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) 
   }
 
   mon->gpio = gpio;
+  mon->gpio_debug = cfg->gpio_debug;
   mon->sensor_pin = cfg->sensor_pin;
   mon->sensor_readings_write_idx = 0;
   mon->sensor_readings_sz = cfg->sensor_monitor_window_seconds / cfg->sensor_poll_period_secs;
