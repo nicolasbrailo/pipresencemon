@@ -1,5 +1,7 @@
 .PHONY: run clean
 
+all: pipresencemon
+
 run: pipresencemon
 	./pipresencemon
 
