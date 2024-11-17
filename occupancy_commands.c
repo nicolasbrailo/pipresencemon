@@ -76,11 +76,11 @@ static bool parse_transition_cmd_from_cfg(const char *cmd,
     goto ALLOC_ERR;
   strcpy(cmd_cfg->cmd, cmd);
 
-  const size_t argc = count_argc(cmd_cfg->cmd);
-  cmd_cfg->args = malloc((argc + 1) * sizeof(void *));
+  // Reserve argc+2: $BIN [$ARG_ARR] \0
+  const size_t argc = count_argc(cmd_cfg->cmd) + 2;
+  cmd_cfg->args = malloc(argc * sizeof(void *));
   if (!cmd_cfg->args)
     goto ALLOC_ERR;
-  cmd_cfg->args[argc] = NULL;
 
   {
     size_t i = 0;
@@ -91,6 +91,8 @@ static bool parse_transition_cmd_from_cfg(const char *cmd,
       tok = strtok(NULL, " ");
     }
   }
+
+  cmd_cfg->args[argc-1] = NULL;
 
   return true;
 
@@ -112,6 +114,7 @@ static void parse_vacancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *c
 }
 
 static void parse_occupancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
+printf("RECV %s\n", cmd);
   struct OccupancyCommands *self = usr;
   const bool should_restart_on_crash = self->cfg->occupancy_cmd_should_restart_on_crash[cmd_idx];
   struct OccupancyTransitionCommand *cmd_cfg =
@@ -151,9 +154,10 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
       cmds[cmd_i].restart_count++;
       printf("Restarting (attempt #%zu) ambience app:", cmds[cmd_i].restart_count);
     } else {
-      printf("Launching ambience app:");
+      printf("Launching ambience app %zu:\n", cmd_i);
     }
 
+    printf("\t");
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
       printf(" %s", cmds[cmd_i].args[i]);
     }
