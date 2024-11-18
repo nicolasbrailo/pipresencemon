@@ -30,7 +30,7 @@ struct GpioPinActiveMonitor {
   // Follows currently_active, but has a delay of $vacancy_motion_timeout_seconds before
   // transitioning from active->inactive
   size_t vacancy_motion_timeout_seconds;
-  size_t vacant_timeout;
+  size_t vacant_timeout_secs;
   atomic_bool active;
 };
 
@@ -52,7 +52,7 @@ static void *gpio_active_monitor_update(void *usr) {
         (gpio_active_monitor_active_pct(mon) < mon->falling_edge_inactive_threshold_pct)) {
       printf("GPIO reports vacancy: %zu%% activity (smaller than threshold for vacancy = %zu%%)\n",
              gpio_active_monitor_active_pct(mon), mon->falling_edge_inactive_threshold_pct);
-      printf("Waiting %zu before reporting vacancy\n", mon->vacant_timeout);
+      printf("Waiting %zu seconds before reporting vacancy\n", mon->vacant_timeout_secs);
       mon->currently_active = false;
 
     } else if (!mon->currently_active &&
@@ -63,11 +63,11 @@ static void *gpio_active_monitor_update(void *usr) {
     }
 
     if (mon->currently_active) {
-      mon->vacant_timeout = mon->vacancy_motion_timeout_seconds;
+      mon->vacant_timeout_secs = mon->vacancy_motion_timeout_seconds;
       mon->active = true;
     } else {
-      if (mon->vacant_timeout > 0) {
-        mon->vacant_timeout -= 1;
+      if (mon->vacant_timeout_secs > 0) {
+        mon->vacant_timeout_secs -= 1;
       } else {
         if (mon->active) {
           printf("Reporting vacancy\n");
@@ -113,8 +113,8 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) 
   mon->sensor_readings_sz = cfg->sensor_monitor_window_seconds / cfg->sensor_poll_period_secs;
   mon->active_count_in_window = start_active ? mon->sensor_readings_sz : 0;
 
-  mon->vacancy_motion_timeout_seconds = mon->vacancy_motion_timeout_seconds;
-  mon->vacant_timeout = mon->vacancy_motion_timeout_seconds;
+  mon->vacancy_motion_timeout_seconds = cfg->vacancy_motion_timeout_seconds;
+  mon->vacant_timeout_secs = cfg->vacancy_motion_timeout_seconds;
   mon->currently_active = start_active;
   mon->active = start_active;
 
