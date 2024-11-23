@@ -20,7 +20,6 @@ struct GPIO {
 };
 
 struct GPIO *gpio_open(bool use_mock) {
-  const char *gpio_path = GPIO_PATH;
   struct GPIO *gpio = malloc(sizeof(struct GPIO));
   if (!gpio) {
     perror("GPIO bad alloc");
@@ -29,12 +28,13 @@ struct GPIO *gpio_open(bool use_mock) {
 
   gpio->use_mock = use_mock;
   if (gpio->use_mock) {
+    printf("Using GPIO mock file at `./gpio_mock`\n");
     return gpio;
   }
 
-  gpio->fd = open(gpio_path, O_RDWR);
+  gpio->fd = open(GPIO_PATH, O_RDWR);
   if (gpio->fd < 0) {
-    fprintf(stderr, "Error opening %s\n", gpio_path);
+    fprintf(stderr, "Error opening %s\n", GPIO_PATH);
     perror("GPIO init fail");
     free(gpio);
     return NULL;
@@ -42,7 +42,7 @@ struct GPIO *gpio_open(bool use_mock) {
 
   gpio->mem = mmap(NULL, GPIO_MEM_SZ, PROT_READ + PROT_WRITE, MAP_SHARED, gpio->fd, 0);
   if (!gpio->mem) {
-    fprintf(stderr, "Can't mmap %s\n", gpio_path);
+    fprintf(stderr, "Can't mmap %s\n", GPIO_PATH);
     perror("GPIO init fail");
     close(gpio->fd);
     free(gpio);

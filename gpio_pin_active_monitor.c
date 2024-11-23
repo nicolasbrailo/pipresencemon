@@ -44,7 +44,7 @@ static void *gpio_active_monitor_update(void *usr) {
     mon->sensor_readings_write_idx = (mon->sensor_readings_write_idx + 1) % mon->sensor_readings_sz;
 
     if (mon->gpio_debug) {
-      printf("Pin reports %s, active_pct=%zu\n", pin_state ? "active" : "inactive",
+      printf("Pin %zu reports %s, active_pct=%zu\n", mon->sensor_pin, pin_state ? "active" : "inactive",
              gpio_active_monitor_active_pct(mon));
     }
 
