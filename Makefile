@@ -71,3 +71,6 @@ deploytgt: pipresencemon pipresencemon.cfg
 	scp ./pipresencemon batman@10.0.0.146:/home/batman/pipresencemon/
 	scp ./pipresencemon.cfg batman@10.0.0.146:/home/batman/pipresencemon/
 
+install_sysroot_deps:
+	true
+
