@@ -17,20 +17,29 @@ XCOMPILE=\
   --sysroot ~/src/xcomp-rpiz-env/mnt/ 
 
 CFLAGS=\
-  $(XCOMPILE)\
-  -ggdb \
-  -Wall -Werror -Wextra \
-  -Wundef \
-  -Wmissing-include-dirs \
-  -Wpointer-arith \
-  -Winit-self \
-  -Wfloat-equal \
-  -Wredundant-decls \
-  -Wimplicit-fallthrough \
-  -Wendif-labels \
-  -Wstrict-aliasing=2 \
-  -Woverflow \
-  -Wformat=2
+	$(XCOMPILE)\
+	-fdiagnostics-color=always \
+	-ffunction-sections -fdata-sections \
+	-ggdb -O3 \
+	-std=gnu99 \
+	-Wall -Werror -Wextra -Wpedantic \
+	-Wendif-labels \
+	-Wfloat-equal \
+	-Wformat=2 \
+	-Wimplicit-fallthrough \
+	-Winit-self \
+	-Winvalid-pch \
+	-Wmissing-field-initializers \
+	-Wmissing-include-dirs \
+	-Wno-strict-prototypes \
+	-Wno-unused-function \
+	-Wno-unused-parameter \
+	-Woverflow \
+	-Wpointer-arith \
+	-Wredundant-decls \
+	-Wstrict-aliasing=2 \
+	-Wundef \
+	-Wuninitialized \
 
 build/%.o: %.c %.h
 	mkdir -p build
