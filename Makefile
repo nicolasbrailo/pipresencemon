@@ -1,13 +1,13 @@
 .PHONY: run clean
 
-all: pipresencemon
+all: pipresencemonsvc
 
-run: pipresencemon
-	./pipresencemon
+run: pipresencemonsvc
+	./pipresencemonsvc
 
 clean:
 	rm -rf build
-	rm -f ./pipresencemon
+	rm -f ./pipresencemonsvc
 	rm -f ./example_svc
 
 XCOMPILE=--sysroot /
@@ -40,7 +40,7 @@ build/%.o: %.c %.h
 	fi ;
 	clang $(CFLAGS) $< -c -o $@
 
-pipresencemon: build/gpio.o \
+pipresencemonsvc: build/gpio.o \
 			build/gpio_pin_active_monitor.o \
 			build/cfg.o \
 			build/occupancy_commands.o \
@@ -67,9 +67,9 @@ xcompile-start:
 xcompile-end:
 	./rpiz-xcompile/umount_rpy_root.sh ~/src/xcomp-rpiz-env
 
-deploytgt: pipresencemon pipresencemon.cfg
-	scp ./pipresencemon batman@10.0.0.146:/home/batman/pipresencemon/
-	scp ./pipresencemon.cfg batman@10.0.0.146:/home/batman/pipresencemon/
+deploytgt: pipresencemonsvc pipresencemon.cfg
+	scp ./pipresencemonsvc batman@10.0.0.146:/home/batman/pipresencemonsvc/
+	scp ./pipresencemonsvc.cfg batman@10.0.0.146:/home/batman/pipresencemonsvc/
 
 install_sysroot_deps:
 	true
