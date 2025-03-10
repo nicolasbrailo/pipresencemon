@@ -16,7 +16,7 @@ XCOMPILE=\
   --sysroot ~/src/xcomp-rpiz-env/mnt/ 
 
 # Uncomment for local build
-XCOMPILE=
+#XCOMPILE=
 
 CFLAGS=\
 	$(XCOMPILE)\
