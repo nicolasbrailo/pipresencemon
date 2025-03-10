@@ -60,7 +60,7 @@ pipresencemonsvc:\
 	build/pipresencemon.o
 	clang $(CFLAGS) $^ -o $@ -ljson-c
 
-example_svc: example_svc.c
+example_svc: src/example_svc.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 .PHONY: xcompile-start xcompile-end deploytgt
