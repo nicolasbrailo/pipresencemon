@@ -3,7 +3,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct Config {
+struct CommandConfig {
+  const char *cmd;
+  bool should_restart_on_crash;
+  size_t max_restarts;
+};
+
+struct PiPresenceMonConfig {
   bool gpio_debug;
   bool gpio_use_mock;
 
@@ -28,24 +34,22 @@ struct Config {
   size_t vacancy_motion_timeout_seconds;
 
   // Restart child cmds on crash
-  bool restart_cmd_on_unexpected_exit;
   size_t restart_cmd_wait_time_seconds;
   size_t crash_on_repeated_cmd_failure_count;
 
   // Commands to be executed when transitioning from no-presence to presence
-  size_t on_occupancy_cmds_cnt;
-  char on_occupancy_cmds[500];
-  bool occupancy_cmd_should_restart_on_crash[10];
+  size_t on_occupancy_sz;
+  struct CommandConfig* on_occupancy;
 
   // Commands to be executed when transitioning from -presence to no-presence
-  size_t on_vacancy_cmds_cnt;
-  char on_vacancy_cmds[500];
-  bool vacancy_cmd_should_restart_on_crash[10];
+  size_t on_vacancy_sz;
+  struct CommandConfig* on_vacancy;
 };
 
-bool cfg_read(const char *fpath, struct Config *cfg);
+struct PiPresenceMonConfig* pipresencemon_cfg_init(const char *fpath);
+void pipresencemon_cfg_free(struct PiPresenceMonConfig* cfg);
 
 typedef void (*cfg_each_cmd_cb_t)(void *usr, size_t cmd_idx, const char *cmd);
 void cfg_each_cmd(const char *cmds, cfg_each_cmd_cb_t cb, void *usr);
 
-void cfg_debug(struct Config *cfg);
+void cfg_debug(struct PiPresenceMonConfig*cfg);

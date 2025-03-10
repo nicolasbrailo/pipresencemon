@@ -2,10 +2,10 @@
 
 #include <stdbool.h>
 
-struct Config;
+struct PiPresenceMonConfig;
 struct OccupancyCommands;
 
-struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg);
+struct OccupancyCommands *occupancy_commands_init(const struct PiPresenceMonConfig *cfg);
 void occupancy_commands_free(struct OccupancyCommands *self);
 
 // Call when occupancy is detected

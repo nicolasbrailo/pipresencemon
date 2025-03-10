@@ -81,7 +81,7 @@ static void *gpio_active_monitor_update(void *usr) {
   return NULL;
 }
 
-struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct Config *cfg) {
+struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct PiPresenceMonConfig *cfg) {
   const bool start_active = true;
 
   if (cfg->sensor_pin > GPIO_PINS) {

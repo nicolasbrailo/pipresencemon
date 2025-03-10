@@ -27,6 +27,7 @@ struct OccupancyTransitionCommand {
   // Cooldown before restarting a crashed process
   size_t restart_cmd_wait_time_seconds;
   size_t restart_count;
+  size_t max_restarts;
 };
 
 enum CurrentState {
@@ -37,20 +38,17 @@ enum CurrentState {
 
 struct OccupancyCommands {
   enum CurrentState current_state;
-  bool restart_cmd_on_unexpected_exit;
   size_t restart_cmd_wait_time_seconds;
   size_t crash_on_repeated_cmd_failure_count;
 
-  size_t on_occupancy_cmds_read;
   size_t on_occupancy_cmds_cnt;
   struct OccupancyTransitionCommand *on_occupancy_cmds;
 
-  size_t on_vacancy_cmds_read;
   size_t on_vacancy_cmds_cnt;
   struct OccupancyTransitionCommand *on_vacancy_cmds;
 
   // A ptr to the config is held for callbacks, only while init runs
-  const struct Config *cfg;
+  const struct PiPresenceMonConfig *cfg;
 };
 
 // Non null if the SIGCHLD handler has been set
@@ -65,63 +63,44 @@ static size_t count_argc(const char *cmd) {
   return argc;
 }
 
-static bool parse_transition_cmd_from_cfg(const char *cmd,
-                                          struct OccupancyTransitionCommand *cmd_cfg,
-                                          bool should_restart_on_crash) {
-  cmd_cfg->pid = 0;
-  cmd_cfg->should_restart_on_crash = should_restart_on_crash;
-  cmd_cfg->should_run_now = false;
-  cmd_cfg->cmd = malloc((1 + strlen(cmd)) * sizeof(char));
-  if (!cmd_cfg->cmd)
+static bool parse_transition_cmd_from_cfg(struct CommandConfig* cmdcfg,
+                                          struct OccupancyTransitionCommand *cmd_state) {
+  cmd_state->pid = 0;
+  cmd_state->should_restart_on_crash = cmdcfg->should_restart_on_crash;
+  cmd_state->restart_count = 0;
+  cmd_state->max_restarts = cmdcfg->max_restarts;
+  cmd_state->should_run_now = false;
+  cmd_state->cmd = malloc((1 + strlen(cmdcfg->cmd)) * sizeof(char));
+
+  if (!cmd_state->cmd)
     goto ALLOC_ERR;
-  strcpy(cmd_cfg->cmd, cmd);
+  strcpy(cmd_state->cmd, cmdcfg->cmd);
 
   // Reserve argc+2: $BIN [$ARG_ARR] \0
-  const size_t argc = count_argc(cmd_cfg->cmd) + 2;
-  cmd_cfg->args = malloc(argc * sizeof(void *));
-  if (!cmd_cfg->args)
+  const size_t argc = count_argc(cmd_state->cmd) + 2;
+  cmd_state->args = malloc(argc * sizeof(void *));
+  if (!cmd_state->args)
     goto ALLOC_ERR;
 
   {
     size_t i = 0;
-    char *tok = strtok(cmd_cfg->cmd, " ");
-    cmd_cfg->bin = &cmd_cfg->cmd[0];
+    char *tok = strtok(cmd_state->cmd, " ");
+    cmd_state->bin = &cmd_state->cmd[0];
     while (tok != NULL) {
-      cmd_cfg->args[i++] = tok;
+      cmd_state->args[i++] = tok;
       tok = strtok(NULL, " ");
     }
   }
 
-  cmd_cfg->args[argc-1] = NULL;
+  cmd_state->args[argc-1] = NULL;
 
   return true;
 
 ALLOC_ERR:
   fprintf(stderr, "occupancy_commands_init bad alloc parsing command\n");
-  free(cmd_cfg->cmd);
-  free(cmd_cfg->args);
+  free(cmd_state->cmd);
+  free(cmd_state->args);
   return false;
-}
-
-static void parse_vacancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
-  struct OccupancyCommands *self = usr;
-  const bool should_restart_on_crash = self->cfg->vacancy_cmd_should_restart_on_crash[cmd_idx];
-  struct OccupancyTransitionCommand *cmd_cfg = &self->on_vacancy_cmds[self->on_vacancy_cmds_read];
-  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg, should_restart_on_crash);
-  // On fail, don't increase counter. This will make the ambience mode validation init fail later
-  if (parse_ok)
-    self->on_vacancy_cmds_read++;
-}
-
-static void parse_occupancy_cmds_from_cfg(void *usr, size_t cmd_idx, const char *cmd) {
-  struct OccupancyCommands *self = usr;
-  const bool should_restart_on_crash = self->cfg->occupancy_cmd_should_restart_on_crash[cmd_idx];
-  struct OccupancyTransitionCommand *cmd_cfg =
-      &self->on_occupancy_cmds[self->on_occupancy_cmds_read];
-  const bool parse_ok = parse_transition_cmd_from_cfg(cmd, cmd_cfg, should_restart_on_crash);
-  // On fail, don't increase counter. This will make the ambience mode validation init fail later
-  if (parse_ok)
-    self->on_occupancy_cmds_read++;
 }
 
 static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
@@ -176,10 +155,10 @@ static void launch_commands(size_t sz, struct OccupancyTransitionCommand *cmds,
       printf("Sleep 1 before execv\n");
       sleep(1);
       execvp(cmds[cmd_i].bin, cmds[cmd_i].args);
-      perror("Ambience mode app failed to execve");
+      perror("Background task failed to execve");
       abort();
     } else if (cmds[cmd_i].pid < 0) {
-      perror("Failed to launch ambience mode app");
+      perror("Failed to launch background task");
       cmds[cmd_i].pid = 0;
     } else {
       cmds[cmd_i].restart_cmd_wait_time_seconds = self->restart_cmd_wait_time_seconds;
@@ -200,16 +179,16 @@ static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
 
     cmds[cmd_i].should_run_now = false;
 
-    printf("Stopping ambience app:");
+    printf("Stopping:");
     for (size_t i = 0; cmds[cmd_i].args[i]; ++i) {
       printf(" %s", cmds[cmd_i].args[i]);
     }
     printf("\n");
 
     if (kill(cmds[cmd_i].pid, SIGINT) != 0) {
-      perror("Failed to stop ambience mode, try to kill");
+      perror("Failed to stop background task, try to kill");
       if (kill(cmds[cmd_i].pid, SIGKILL) != 0) {
-        perror("Failed to kill ambience mode");
+        perror("Failed to kill background task");
         // If this fails, pid will be non zero, so a new one won't be launched
         // Probably better to avoid launching new ambience apps, instead of leaking them
         return;
@@ -221,7 +200,7 @@ static void stop_commands(size_t sz, struct OccupancyTransitionCommand *cmds) {
     cmds[cmd_i].pid = 0;
 
     if (wstatus != 0) {
-      printf("ERROR: Ambience app %s exit with status %d\n", cmds[cmd_i].bin, wstatus);
+      printf("ERROR: Background task %s exit with status %d\n", cmds[cmd_i].bin, wstatus);
     }
   }
 }
@@ -279,7 +258,7 @@ void sighandler_on_child_cmd_exit() {
   }
 }
 
-struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
+struct OccupancyCommands *occupancy_commands_init(const struct PiPresenceMonConfig *cfg) {
   if (g_sigchld_handler != NULL) {
     fprintf(stderr, "Handler for occupancy command exit already set. Are you creating two "
                     "OccupancyCommands object?\n");
@@ -294,19 +273,16 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
 
   self->current_state = STATE_INVALID;
   self->cfg = cfg;
-  self->restart_cmd_on_unexpected_exit = cfg->restart_cmd_on_unexpected_exit;
   self->restart_cmd_wait_time_seconds = cfg->restart_cmd_wait_time_seconds;
   self->crash_on_repeated_cmd_failure_count = cfg->crash_on_repeated_cmd_failure_count;
 
-  self->on_occupancy_cmds_cnt = cfg->on_occupancy_cmds_cnt;
-  self->on_occupancy_cmds_read = 0;
+  self->on_occupancy_cmds_cnt = cfg->on_occupancy_sz;
   self->on_occupancy_cmds =
       malloc(self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
   memset(self->on_occupancy_cmds, 0,
          self->on_occupancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
 
-  self->on_vacancy_cmds_cnt = cfg->on_vacancy_cmds_cnt;
-  self->on_vacancy_cmds_read = 0;
+  self->on_vacancy_cmds_cnt = cfg->on_vacancy_sz;
   self->on_vacancy_cmds =
       malloc(self->on_vacancy_cmds_cnt * sizeof(struct OccupancyTransitionCommand));
   memset(self->on_vacancy_cmds, 0,
@@ -317,19 +293,24 @@ struct OccupancyCommands *occupancy_commands_init(const struct Config *cfg) {
     goto ERR;
   }
 
-  cfg_each_cmd(cfg->on_occupancy_cmds, parse_occupancy_cmds_from_cfg, self);
-  cfg_each_cmd(cfg->on_vacancy_cmds, parse_vacancy_cmds_from_cfg, self);
-
-  if (self->on_occupancy_cmds_read != self->on_occupancy_cmds_cnt) {
-    fprintf(stderr, "occupancy commands: read %zu commands, expected %zu\n",
-            self->on_occupancy_cmds_read, self->on_occupancy_cmds_cnt);
-    goto ERR;
+  printf("OccupancyCommands starting. On occupancy, will:\n");
+  for (size_t i = 0; i < cfg->on_occupancy_sz; ++i) {
+    struct OccupancyTransitionCommand *cmd_cfg = &self->on_occupancy_cmds[i];
+    const bool ok = parse_transition_cmd_from_cfg(&cfg->on_occupancy[i], cmd_cfg);
+    if (!ok) {
+      goto ERR;
+    }
+    printf(" * exec `%s`\n", cmd_cfg->cmd);
   }
 
-  if (self->on_vacancy_cmds_read != self->on_vacancy_cmds_cnt) {
-    fprintf(stderr, "Vacancy commands: read %zu commands, expected %zu\n",
-            self->on_vacancy_cmds_read, self->on_vacancy_cmds_cnt);
-    goto ERR;
+  printf("On vacancy, will:\n");
+  for (size_t i = 0; i < cfg->on_vacancy_sz; ++i) {
+    struct OccupancyTransitionCommand *cmd_cfg = &self->on_vacancy_cmds[i];
+    const bool ok = parse_transition_cmd_from_cfg(&cfg->on_vacancy[i], cmd_cfg);
+    if (!ok) {
+      goto ERR;
+    }
+    printf(" * exec `%s`\n", cmd_cfg->cmd);
   }
 
   // Nothing else in here should access the config struct

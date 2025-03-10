@@ -10,28 +10,23 @@
 #include <string.h>
 #include <unistd.h>
 
-#define DEFAULT_CFG_FNAME "pipresencemon.cfg"
-
 atomic_bool gUsrStop = false;
 void sighandler(int _unused __attribute__((unused))) { gUsrStop = true; }
 
 int main(int argc, const char **argv) {
-  const char *cfg_fname = DEFAULT_CFG_FNAME;
-  if (argc > 1) {
-    cfg_fname = argv[1];
-  }
-
-  struct Config cfg;
-  if (!cfg_read(cfg_fname, &cfg)) {
-    fprintf(stderr, "Can't open config file %s\n", cfg_fname);
+  int ret = 0;
+  const char *cfg_path = (argc > 1) ? argv[1] : "pipresencemon.json";
+  struct PiPresenceMonConfig* cfg = pipresencemon_cfg_init(cfg_path);
+  if (!cfg) {
+    fprintf(stderr, "Can't open config file %s\n", cfg_path);
     return 1;
   }
-  cfg_debug(&cfg);
 
-  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init(&cfg);
-  struct OccupancyCommands *occupancy_cmds = occupancy_commands_init(&cfg);
+  printf("Starting PiPresenceMonitor service...\n");
+  cfg_debug(cfg);
 
-  int ret = 0;
+  struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init(cfg);
+  struct OccupancyCommands *occupancy_cmds = occupancy_commands_init(cfg);
   if (!gpio_mon || !occupancy_cmds) {
     fprintf(stderr, "Startup fail\n");
     ret = 1;
@@ -64,8 +59,12 @@ int main(int argc, const char **argv) {
     sleep(1);
   }
 
+  ret = 0;
+
 CLEANUP:
   occupancy_commands_free(occupancy_cmds);
   gpio_active_monitor_free(gpio_mon);
+  pipresencemon_cfg_free(cfg);
   return ret;
 }
+

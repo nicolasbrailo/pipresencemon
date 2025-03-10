@@ -10,11 +10,13 @@ clean:
 	rm -f ./pipresencemonsvc
 	rm -f ./example_svc
 
-XCOMPILE=--sysroot /
 XCOMPILE=\
   -target arm-linux-gnueabihf \
   -mcpu=arm1176jzf-s \
   --sysroot ~/src/xcomp-rpiz-env/mnt/ 
+
+# Uncomment for local build
+XCOMPILE=
 
 CFLAGS=\
 	$(XCOMPILE)\
@@ -41,7 +43,7 @@ CFLAGS=\
 	-Wundef \
 	-Wuninitialized \
 
-build/%.o: %.c %.h
+build/%.o: src/%.c
 	mkdir -p build
 	@if [ ! -d ~/src/xcomp-rpiz-env/mnt/lib/raspberrypi-sys-mods ]; then \
 		echo "xcompiler sysroot not detected, try `make xcompile-start`"; \
@@ -49,23 +51,19 @@ build/%.o: %.c %.h
 	fi ;
 	clang $(CFLAGS) $< -c -o $@
 
-pipresencemonsvc: build/gpio.o \
-			build/gpio_pin_active_monitor.o \
-			build/cfg.o \
-			build/occupancy_commands.o \
-			pipresencemon.c
-	clang $(CFLAGS) $^ -o $@
+pipresencemonsvc:\
+	build/gpio.o \
+	build/gpio_pin_active_monitor.o \
+	build/config_base.o \
+	build/cfg.o \
+	build/occupancy_commands.o \
+	build/pipresencemon.o
+	clang $(CFLAGS) $^ -o $@ -ljson-c
 
 example_svc: example_svc.c
 	$(CC) $(CFLAGS) $^ -o $@
 
-.PHONY: format formatall xcompile-start xcompile-end deploytgt
-format:
-	git clang-format
-
-formatall:
-	ls *.c | xargs clang-format -i
-	ls *.h | xargs clang-format -i
+.PHONY: xcompile-start xcompile-end deploytgt
 
 system-deps:
 	sudo apt-get install clang-format
@@ -76,10 +74,6 @@ xcompile-start:
 xcompile-end:
 	./rpiz-xcompile/umount_rpy_root.sh ~/src/xcomp-rpiz-env
 
-deploytgt: pipresencemonsvc pipresencemon.cfg
-	scp ./pipresencemonsvc batman@10.0.0.146:/home/batman/pipresencemonsvc/
-	scp ./pipresencemonsvc.cfg batman@10.0.0.146:/home/batman/pipresencemonsvc/
-
 install_sysroot_deps:
-	true
+	./rpiz-xcompile/add_sysroot_pkg.sh ~/src/xcomp-rpiz-env http://raspbian.raspberrypi.com/raspbian/pool/main/j/json-c/libjson-c-dev_0.16-2_armhf.deb
 
