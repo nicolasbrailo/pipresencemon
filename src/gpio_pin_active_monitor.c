@@ -32,6 +32,10 @@ struct GpioPinActiveMonitor {
   size_t vacancy_motion_timeout_seconds;
   size_t vacant_timeout_secs;
   atomic_bool active;
+
+  size_t debug_last_active_pct;
+  bool debug_last_active;
+  bool debug_throttle;
 };
 
 static void *gpio_active_monitor_update(void *usr) {
@@ -44,8 +48,18 @@ static void *gpio_active_monitor_update(void *usr) {
     mon->sensor_readings_write_idx = (mon->sensor_readings_write_idx + 1) % mon->sensor_readings_sz;
 
     if (mon->gpio_debug) {
-      printf("Pin %zu reports %s, active_pct=%zu\n", mon->sensor_pin, pin_state ? "active" : "inactive",
-             gpio_active_monitor_active_pct(mon));
+      const size_t active_pct = gpio_active_monitor_active_pct(mon);
+      if (active_pct != mon->debug_last_active_pct || pin_state != mon->debug_last_active) {
+        printf("Pin %zu reports %s, active_pct=%zu\n", mon->sensor_pin,
+               pin_state ? "active" : "inactive", active_pct);
+        mon->debug_last_active_pct = active_pct;
+        mon->debug_last_active = pin_state;
+      } else {
+        if (!mon->debug_throttle) {
+          printf("Pin %zu, will stop debug-logging until it changes state\n", mon->sensor_pin);
+          mon->debug_throttle = true;
+        }
+      }
     }
 
     if (mon->currently_active &&
@@ -117,6 +131,11 @@ struct GpioPinActiveMonitor *gpio_active_monitor_init(const struct PiPresenceMon
   mon->vacant_timeout_secs = cfg->vacancy_motion_timeout_seconds;
   mon->currently_active = start_active;
   mon->active = start_active;
+
+  // Start with impossible number to force first log always on
+  mon->debug_last_active_pct = 500;
+  mon->debug_last_active = 0;
+  mon->debug_throttle = false;
 
   mon->sensor_readings = malloc(sizeof(mon->sensor_readings[0]) * mon->sensor_readings_sz);
   if (!mon->sensor_readings) {

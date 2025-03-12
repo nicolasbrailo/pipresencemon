@@ -8,21 +8,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 atomic_bool gUsrStop = false;
 void sighandler(int _unused __attribute__((unused))) { gUsrStop = true; }
 
 int main(int argc, const char **argv) {
+  openlog(argv[0], 0, LOG_USER);
+
   int ret = 0;
   const char *cfg_path = (argc > 1) ? argv[1] : "pipresencemon.json";
-  struct PiPresenceMonConfig* cfg = pipresencemon_cfg_init(cfg_path);
+  struct PiPresenceMonConfig *cfg = pipresencemon_cfg_init(cfg_path);
   if (!cfg) {
-    fprintf(stderr, "Can't open config file %s\n", cfg_path);
+    syslog(LOG_CRIT, "Can't open config file %s\n", cfg_path);
     return 1;
   }
 
-  printf("Starting PiPresenceMonitor service...\n");
+  syslog(LOG_INFO, "Starting PiPresenceMonitor service...\n");
   cfg_debug(cfg);
 
   struct GpioPinActiveMonitor *gpio_mon = gpio_active_monitor_init(cfg);
@@ -67,4 +70,3 @@ CLEANUP:
   pipresencemon_cfg_free(cfg);
   return ret;
 }
-

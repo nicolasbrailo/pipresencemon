@@ -9,7 +9,6 @@ struct Config {
   struct json_object *json;
 };
 
-
 struct Config *cfg_init(const char *fpath) {
   struct Config *h = malloc(sizeof(struct Config));
   if (!h) {
@@ -39,30 +38,27 @@ void cfg_free(struct Config *h) {
   free(h);
 }
 
-
-#define CFG_GET_STR(key)                                                       \
-  {                                                                            \
-    const char *tmp = NULL;                                                    \
-    if (!config_get_string(cfgbase, #key, &tmp)) {                             \
-      goto err;                                                                \
-    } else {                                                                   \
-      /* Make a copy; the other string belongs to jsonc */                     \
-      cfg->key = strdup(tmp);                                                  \
-    }                                                                          \
+#define CFG_GET_STR(key)                                                                           \
+  {                                                                                                \
+    const char *tmp = NULL;                                                                        \
+    if (!config_get_string(cfgbase, #key, &tmp)) {                                                 \
+      goto err;                                                                                    \
+    } else {                                                                                       \
+      /* Make a copy; the other string belongs to jsonc */                                         \
+      cfg->key = strdup(tmp);                                                                      \
+    }                                                                                              \
   }
 
 bool cfg_get_string_strdup(struct Config *h, const char *k, const char **v) {
   struct json_object *n;
   if (!json_object_object_get_ex(h->json, k, &n)) {
-    fprintf(stderr,
-            "Failed to read config: can't find str value %s\n", k);
+    fprintf(stderr, "Failed to read config: can't find str value %s\n", k);
     return false;
   }
 
   *v = strdup(json_object_get_string(n));
   if (!*v) {
-    fprintf(stderr,
-            "Failed to read config: can't alloc for value %s\n", k);
+    fprintf(stderr, "Failed to read config: can't alloc for value %s\n", k);
     return false;
   }
 
@@ -87,8 +83,8 @@ bool cfg_get_size_t(struct Config *h, const char *k, size_t *v, size_t min, size
   }
 
   if ((iv < 0) || ((size_t)iv < min) || ((size_t)iv > max)) {
-    fprintf(stderr,
-            "Bad config value: invalid value %d for %s, expected interval is [%zu, %zu]\n", iv, k, min, max);
+    fprintf(stderr, "Bad config value: invalid value %d for %s, expected interval is [%zu, %zu]\n",
+            iv, k, min, max);
     return false;
   }
 
@@ -107,7 +103,7 @@ bool cfg_get_bool(struct Config *h, const char *k, bool *v) {
   return false;
 }
 
-bool cfg_get_arr(struct Config *h, const char *k, arr_parse_cb cb, void* usr) {
+bool cfg_get_arr(struct Config *h, const char *k, arr_parse_cb cb, void *usr) {
   struct json_object *arr;
   if (!json_object_object_get_ex(h->json, k, &arr) || !json_object_is_type(arr, json_type_array)) {
     fprintf(stderr, "Failed to read config: can't find array %s\n", k);
@@ -116,15 +112,12 @@ bool cfg_get_arr(struct Config *h, const char *k, arr_parse_cb cb, void* usr) {
 
   const size_t arr_len = json_object_array_length(arr);
   for (size_t i = 0; i < arr_len; i++) {
-      struct Config tmp = {
-        .json = json_object_array_get_idx(arr, i)
-      };
-      if (!cb(arr_len, i, &tmp, usr)) {
-        fprintf(stderr, "Failed to read config: invalid value at %s[%zu]\n", k, i);
-        return false;
-      }
+    struct Config tmp = {.json = json_object_array_get_idx(arr, i)};
+    if (!cb(arr_len, i, &tmp, usr)) {
+      fprintf(stderr, "Failed to read config: invalid value at %s[%zu]\n", k, i);
+      return false;
+    }
   }
 
   return true;
 }
-

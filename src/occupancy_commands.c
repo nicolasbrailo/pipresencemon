@@ -63,7 +63,7 @@ static size_t count_argc(const char *cmd) {
   return argc;
 }
 
-static bool parse_transition_cmd_from_cfg(struct CommandConfig* cmdcfg,
+static bool parse_transition_cmd_from_cfg(struct CommandConfig *cmdcfg,
                                           struct OccupancyTransitionCommand *cmd_state) {
   cmd_state->pid = 0;
   cmd_state->should_restart_on_crash = cmdcfg->should_restart_on_crash;
@@ -92,7 +92,7 @@ static bool parse_transition_cmd_from_cfg(struct CommandConfig* cmdcfg,
     }
   }
 
-  cmd_state->args[argc-1] = NULL;
+  cmd_state->args[argc - 1] = NULL;
 
   return true;
 
@@ -211,15 +211,15 @@ bool sighandler_search_exit_child(size_t sz, struct OccupancyTransitionCommand *
     if (pid == cmds[i].pid) {
       if (cmds[i].should_run_now) {
         if (wstatus == 0) {
-            printf("Command %s with pid %i exit normally\n", cmds[i].bin, pid);
-            cmds[i].should_run_now = false;
+          printf("Command %s with pid %i exit normally\n", cmds[i].bin, pid);
+          cmds[i].should_run_now = false;
         } else {
-            printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
-            if (cmds[i].should_restart_on_crash) {
-              printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
-            } else {
-              printf("This app WON'T restart.\n");
-            }
+          printf("CRASH: Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
+          if (cmds[i].should_restart_on_crash) {
+            printf("Will restart in %zu seconds...\n", cmds[i].restart_cmd_wait_time_seconds);
+          } else {
+            printf("This app WON'T restart.\n");
+          }
         }
       } else {
         printf("Command %s with pid %i exit, ret %i\n", cmds[i].bin, pid, wstatus);
