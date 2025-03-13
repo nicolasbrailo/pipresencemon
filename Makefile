@@ -54,7 +54,7 @@ build/%.o: src/%.c
 pipresencemonsvc:\
 	build/gpio.o \
 	build/gpio_pin_active_monitor.o \
-	build/config_base.o \
+	build/json.o \
 	build/cfg.o \
 	build/occupancy_commands.o \
 	build/pipresencemon.o

@@ -1,5 +1,5 @@
 #include "cfg.h"
-#include "config_base.h"
+#include "json.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -28,21 +28,21 @@ static bool maybe_realloc(const char *k, size_t *sz, size_t read_sz, struct Comm
   return true;
 }
 
-static bool parse_cmd(struct Config *handle, struct CommandConfig *cmd) {
+static bool parse_cmd(struct json_object* handle, struct CommandConfig *cmd) {
   bool ok = true;
-  ok &= cfg_get_bool(handle, "should_restart_on_crash", &cmd->should_restart_on_crash);
-  ok &= cfg_get_size_t(handle, "max_restarts", &cmd->max_restarts, 0, 99);
-  ok &= cfg_get_string_strdup(handle, "cmd", &cmd->cmd);
+  ok &= json_get_bool(handle, "should_restart_on_crash", &cmd->should_restart_on_crash);
+  ok &= json_get_size_t(handle, "max_restarts", &cmd->max_restarts, 0, 99);
+  ok &= json_get_strdup(handle, "cmd", &cmd->cmd);
   return ok;
 }
 
-static bool parse_on_occupancy(size_t arr_len, size_t idx, struct Config *handle, void *usr) {
+static bool parse_on_occupancy(size_t arr_len, size_t idx, struct json_object* handle, void *usr) {
   struct PiPresenceMonConfig *cfg = usr;
   return maybe_realloc("on_occupancy", &cfg->on_occupancy_sz, arr_len, &cfg->on_occupancy) &&
          parse_cmd(handle, &cfg->on_occupancy[idx]);
 }
 
-static bool parse_on_vacancy(size_t arr_len, size_t idx, struct Config *handle, void *usr) {
+static bool parse_on_vacancy(size_t arr_len, size_t idx, struct json_object* handle, void *usr) {
   struct PiPresenceMonConfig *cfg = usr;
   return maybe_realloc("on_vacancy", &cfg->on_vacancy_sz, arr_len, &cfg->on_vacancy) &&
          parse_cmd(handle, &cfg->on_vacancy[idx]);
@@ -51,7 +51,7 @@ static bool parse_on_vacancy(size_t arr_len, size_t idx, struct Config *handle, 
 struct PiPresenceMonConfig *pipresencemon_cfg_init(const char *fpath) {
   bool ok = true;
   struct PiPresenceMonConfig *cfg = malloc(sizeof(struct PiPresenceMonConfig));
-  struct Config *cfgbase = cfg_init(fpath);
+  struct json_object* cfgbase = json_init(fpath);
   if (!cfg || !cfgbase) {
     ok = false;
     goto err;
@@ -62,24 +62,24 @@ struct PiPresenceMonConfig *pipresencemon_cfg_init(const char *fpath) {
   cfg->on_occupancy = NULL;
   cfg->on_vacancy = NULL;
 
-  ok &= cfg_get_bool(cfgbase, "gpio_debug", &cfg->gpio_debug);
-  ok &= cfg_get_bool(cfgbase, "gpio_use_mock", &cfg->gpio_use_mock);
-  ok &= cfg_get_size_t(cfgbase, "sensor_pin", &cfg->sensor_pin, 0, 40);
-  ok &= cfg_get_size_t(cfgbase, "sensor_poll_period_secs", &cfg->sensor_poll_period_secs, 1, 30);
-  ok &= cfg_get_size_t(cfgbase, "sensor_monitor_window_seconds",
+  ok &= json_get_bool(cfgbase, "gpio_debug", &cfg->gpio_debug);
+  ok &= json_get_bool(cfgbase, "gpio_use_mock", &cfg->gpio_use_mock);
+  ok &= json_get_size_t(cfgbase, "sensor_pin", &cfg->sensor_pin, 0, 40);
+  ok &= json_get_size_t(cfgbase, "sensor_poll_period_secs", &cfg->sensor_poll_period_secs, 1, 30);
+  ok &= json_get_size_t(cfgbase, "sensor_monitor_window_seconds",
                        &cfg->sensor_monitor_window_seconds, 5, 100);
-  ok &= cfg_get_size_t(cfgbase, "rising_edge_occupancy_threshold_pct",
+  ok &= json_get_size_t(cfgbase, "rising_edge_occupancy_threshold_pct",
                        &cfg->rising_edge_occupancy_threshold_pct, 10, 100);
-  ok &= cfg_get_size_t(cfgbase, "falling_edge_vacancy_threshold_pct",
+  ok &= json_get_size_t(cfgbase, "falling_edge_vacancy_threshold_pct",
                        &cfg->falling_edge_vacancy_threshold_pct, 1, 100);
-  ok &= cfg_get_size_t(cfgbase, "vacancy_motion_timeout_seconds",
+  ok &= json_get_size_t(cfgbase, "vacancy_motion_timeout_seconds",
                        &cfg->vacancy_motion_timeout_seconds, 1, 600);
-  ok &= cfg_get_size_t(cfgbase, "restart_cmd_wait_time_seconds",
+  ok &= json_get_size_t(cfgbase, "restart_cmd_wait_time_seconds",
                        &cfg->restart_cmd_wait_time_seconds, 0, 100);
-  ok &= cfg_get_size_t(cfgbase, "crash_on_repeated_cmd_failure_count",
+  ok &= json_get_size_t(cfgbase, "crash_on_repeated_cmd_failure_count",
                        &cfg->crash_on_repeated_cmd_failure_count, 0, 50);
-  ok &= cfg_get_arr(cfgbase, "on_occupancy", parse_on_occupancy, cfg);
-  ok &= cfg_get_arr(cfgbase, "on_vacancy", parse_on_vacancy, cfg);
+  ok &= json_get_arr(cfgbase, "on_occupancy", parse_on_occupancy, cfg);
+  ok &= json_get_arr(cfgbase, "on_vacancy", parse_on_vacancy, cfg);
 
   if (cfg->rising_edge_occupancy_threshold_pct < cfg->falling_edge_vacancy_threshold_pct) {
     fprintf(stderr,
@@ -98,9 +98,7 @@ struct PiPresenceMonConfig *pipresencemon_cfg_init(const char *fpath) {
 
   // fallthrough
 err:
-  if (cfgbase) {
-    cfg_free(cfgbase);
-  }
+  json_free(cfgbase);
 
   if (ok) {
     return cfg;
