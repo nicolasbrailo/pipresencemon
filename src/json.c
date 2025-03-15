@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct json_object* json_init(const char *fpath) {
-  struct json_object* json = json_object_from_file(fpath);
+struct json_object *json_init(const char *fpath) {
+  struct json_object *json = json_object_from_file(fpath);
   if (!json) {
     fprintf(stderr, "Config fail: can't parse JSON %s\n", fpath);
     goto err;
@@ -27,16 +27,9 @@ void json_free(struct json_object *h) {
   json_object_put(h);
 }
 
-static bool json_get_strdup_impl(struct json_object *h, const char *k, const char **v, bool is_optional) {
-  struct json_object *n;
-  if (!json_object_object_get_ex(h, k, &n)) {
-    if (!is_optional) {
-      fprintf(stderr, "Failed to read config: can't find str value %s\n", k);
-    }
-    return false;
-  }
-
-  const char* json_v = json_object_get_string(n);
+static bool jsonobj_strdup_impl(struct json_object *h, const char *k,
+                                const char **v, bool is_optional) {
+  const char *json_v = json_object_get_string(h);
   if (!json_v) {
     if (!is_optional) {
       fprintf(stderr, "Failed to read key %s, not a string\n", k);
@@ -62,7 +55,25 @@ static bool json_get_strdup_impl(struct json_object *h, const char *k, const cha
   return true;
 }
 
-bool json_get_optional_strdup(struct json_object *h, const char *k, const char **v) {
+bool jsonobj_strdup(struct json_object *h, const char **v) {
+  return jsonobj_strdup_impl(h, "string", v, false);
+}
+
+static bool json_get_strdup_impl(struct json_object *h, const char *k,
+                                 const char **v, bool is_optional) {
+  struct json_object *n;
+  if (!json_object_object_get_ex(h, k, &n)) {
+    if (!is_optional) {
+      fprintf(stderr, "Failed to read config: can't find str value %s\n", k);
+    }
+    return false;
+  }
+
+  return jsonobj_strdup_impl(n, k, v, is_optional);
+}
+
+bool json_get_optional_strdup(struct json_object *h, const char *k,
+                              const char **v) {
   return json_get_strdup_impl(h, k, v, true);
 }
 
@@ -80,15 +91,19 @@ bool json_get_int(struct json_object *h, const char *k, int *v) {
   return false;
 }
 
-bool json_get_size_t(struct json_object *h, const char *k, size_t *v, size_t min, size_t max) {
+bool json_get_size_t(struct json_object *h, const char *k, size_t *v,
+                     size_t min, size_t max) {
   int iv;
   if (!json_get_int(h, k, &iv)) {
-    fprintf(stderr, "Failed to read config: can't find value %s of type size_t\n", k);
+    fprintf(stderr,
+            "Failed to read config: can't find value %s of type size_t\n", k);
     return false;
   }
 
   if ((iv < 0) || ((size_t)iv < min) || ((size_t)iv > max)) {
-    fprintf(stderr, "Bad config value: invalid value %d for %s, expected interval is [%zu, %zu]\n",
+    fprintf(stderr,
+            "Bad config value: invalid value %d for %s, expected interval is "
+            "[%zu, %zu]\n",
             iv, k, min, max);
     return false;
   }
@@ -108,18 +123,21 @@ bool json_get_bool(struct json_object *h, const char *k, bool *v) {
   return false;
 }
 
-bool json_get_arr(struct json_object *h, const char *k, arr_parse_cb cb, void *usr) {
+bool json_get_arr(struct json_object *h, const char *k, arr_parse_cb cb,
+                  void *usr) {
   struct json_object *arr;
-  if (!json_object_object_get_ex(h, k, &arr) || !json_object_is_type(arr, json_type_array)) {
+  if (!json_object_object_get_ex(h, k, &arr) ||
+      !json_object_is_type(arr, json_type_array)) {
     fprintf(stderr, "Failed to read config: can't find array %s\n", k);
     return false;
   }
 
   const size_t arr_len = json_object_array_length(arr);
   for (size_t i = 0; i < arr_len; i++) {
-    struct json_object* tmp = json_object_array_get_idx(arr, i);
+    struct json_object *tmp = json_object_array_get_idx(arr, i);
     if (!cb(arr_len, i, tmp, usr)) {
-      fprintf(stderr, "Failed to read config: invalid value at %s[%zu]\n", k, i);
+      fprintf(stderr, "Failed to read config: invalid value at %s[%zu]\n", k,
+              i);
       return false;
     }
   }
@@ -127,7 +145,7 @@ bool json_get_arr(struct json_object *h, const char *k, arr_parse_cb cb, void *u
   return true;
 }
 
-const char* json_get_nested_key(struct json_object* obj, const char* key) {
+const char *json_get_nested_key(struct json_object *obj, const char *key) {
   const size_t max_depth = 10;
   char subkey[32];
   size_t subkey_i = 0;
@@ -139,11 +157,17 @@ const char* json_get_nested_key(struct json_object* obj, const char* key) {
     }
 
     if (subkey_f == subkey_i) {
-      fprintf(stderr, "Error retrieving metadata: requested metadata key '%s' can't be parsed\n", key);
+      fprintf(stderr,
+              "Error retrieving metadata: requested metadata key '%s' can't be "
+              "parsed\n",
+              key);
       return NULL;
 
     } else if (subkey_f - subkey_i > sizeof(subkey)) {
-      fprintf(stderr, "Error retrieving metadata: requested metadata key '%s' is too large to handle\n", key);
+      fprintf(stderr,
+              "Error retrieving metadata: requested metadata key '%s' is too "
+              "large to handle\n",
+              key);
       return NULL;
 
     } else {
@@ -152,9 +176,11 @@ const char* json_get_nested_key(struct json_object* obj, const char* key) {
       subkey[subkey_sz] = '\0';
 
       // Traverse json tree
-      struct json_object* tmp;
+      struct json_object *tmp;
       if (!json_object_object_get_ex(obj, subkey, &tmp)) {
-        fprintf(stderr, "Error retrieving metadata: requested key '%s' doesn't exist\n", key);
+        fprintf(stderr,
+                "Error retrieving metadata: requested key '%s' doesn't exist\n",
+                key);
         return NULL;
       }
       obj = tmp;
@@ -166,11 +192,13 @@ const char* json_get_nested_key(struct json_object* obj, const char* key) {
         return json_object_get_string(obj);
       }
 
-      subkey_f = subkey_i = subkey_f+1;
+      subkey_f = subkey_i = subkey_f + 1;
     }
   }
 
-  fprintf(stderr, "Error retrieving metadata: requested metadata key '%s' too deeply nested, expected max %zu levels\n", key, max_depth);
+  fprintf(stderr,
+          "Error retrieving metadata: requested metadata key '%s' too deeply "
+          "nested, expected max %zu levels\n",
+          key, max_depth);
   return NULL;
 }
-
